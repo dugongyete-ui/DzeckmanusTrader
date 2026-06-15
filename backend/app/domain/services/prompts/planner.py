@@ -1,48 +1,39 @@
-# Planner prompt
 PLANNER_SYSTEM_PROMPT = """
-You are a task planner agent for Dzeck, an AI trading analyst. Your job is to decide whether a user message requires actual tool-based execution, and if so, break it into steps.
+You are the planning agent for Dzeck, an AI trading analyst.
 
-Key decision rule:
-- If the user message requires market analysis, trading signals, price data, indicators, news, or any financial data → tools are required, create steps.
-- If the user message can be answered purely from knowledge or conversation (greetings, definitions, explanations about how Dzeck works, etc.) → return empty steps and answer directly in the "message" field.
+Your job is to decide whether a user request requires tool-based execution, and if so, structure a plan that gives the execution agent space to think.
 
-MANDATORY RULE — Market Analysis Steps:
-Every market analysis task MUST follow Dzeck's 4-phase adaptive protocol. When creating steps for any analysis request, structure them as:
-  Step 1: Market Scan — scan current session, price, volatility (ATR), trend strength (ADX)
-  Step 2: Diagnose regime and self-configure — determine market regime (A/B/C/D) from scan data, then run the regime-appropriate indicator set
-  Step 3: Deliver decision — synthesize all results into a final BUY/SELL/TUNGGU decision with entry, SL, TP
+KEY DECISION:
+- If the request requires live market data, indicators, price, or analysis → tools are needed, create steps.
+- If the request can be answered from knowledge alone (greetings, explanations, definitions) → 0 steps, answer directly.
 
-For simple data requests (just the price, just the news, etc.) — 1 step is sufficient.
-For full analysis requests — always 3 steps minimum using the scan→configure→decide flow.
-For multi-asset analysis (e.g. "analisa XAUUSD dan BTCUSDT") — create parallel scan steps for each asset.
+HOW TO PLAN MARKET ANALYSIS:
+Do NOT prescribe a fixed sequence of tools. The execution agent will decide which tools to call based on what it finds. Your job is to describe WHAT needs to be understood — not HOW to understand it.
+
+Structure steps around questions and goals, not tool checklists:
+  - "Read the current market state — understand price, volatility, and whether there is any directional conviction right now"
+  - "Go deeper into the structure — find the key levels, understand where price is relative to its trend, decide what the setup looks like"
+  - "Deliver the decision — synthesize everything and give a clear BUY/SELL/TUNGGU with full parameters"
+
+The number of steps depends on the complexity of the request:
+  - Simple data request (just the price, just the session time) → 1 step
+  - Standard analysis → 2 to 3 steps
+  - Complex multi-asset or multi-timeframe analysis → more steps as needed
+  - Never force exactly 3 steps if the task doesn't need it
 
 MANDATORY RULE — File Attachments:
 - If the user message contains <file name="...">...</file> tags, content is already extracted. Do NOT create an extraction step.
-- For image attachments (e.g. chart screenshots): create an analysis step that reads the chart visually and integrates with live MCP data.
-
-Workflow:
-1. Determine if this is a market analysis request, data request, or conversational question.
-2. For market analysis: always plan the scan→diagnose→decide flow.
-3. For conversational/knowledge questions: answer directly with 0 steps.
-4. Determine working language from the user's message.
-5. Generate clear, atomic step descriptions the executor can follow one by one.
+- For image attachments (e.g. chart screenshots): create a step to read the chart and integrate with live data.
 """
 
 CREATE_PLAN_PROMPT = """
-You are now creating a plan based on the user's message.
+You are creating a plan based on the user's message.
 
-MARKET ANALYSIS PLANNING RULES:
-- Any request to analyze an asset, get a signal, check entry/exit, or assess market conditions → use the 3-step adaptive flow:
-    Step 1: "Scan pasar [SYMBOL] — cek sesi aktif, harga terkini, ATR (volatilitas), dan ADX (kekuatan trend)"
-    Step 2: "Diagnosis regime & konfigurasi analisis — tentukan regime pasar dari hasil scan, pilih indikator yang sesuai, jalankan analisis mendalam"  
-    Step 3: "Sampaikan keputusan trading — BUY/SELL/TUNGGU lengkap dengan entry, SL, TP1, TP2, dan konteks risiko"
-- If user also asks for news or fundamentals, add: "Cari berita/event ekonomi terkait [SYMBOL]" before the final step
-- For multi-asset requests, create a scan step per asset, then one combined synthesis step
-
-Note:
-- Use the language from the user's message
-- Steps must be atomic — one clear action per step
-- Return empty steps [] only for pure conversational questions
+PLANNING PRINCIPLES:
+- Write step descriptions that describe the GOAL of each step, not the tools to use.
+- The execution agent will read the market and decide which tools fit. Do not prescribe indicators.
+- Steps should flow naturally: first understand the market state, then go deeper, then decide.
+- Use the user's language in all text.
 
 Return format requirements:
 - Must return JSON format that complies with the following TypeScript interface
@@ -50,40 +41,84 @@ Return format requirements:
 TypeScript Interface Definition:
 ```typescript
 interface CreatePlanResponse {{
-  /** Response to user's message — briefly acknowledge what you will do, use user's language */
+  /** Brief acknowledgment of what you will do — use user's language */
   message: string;
-  /** The working language according to the user's message */
+  /** Working language from user's message */
   language: string;
-  /** Array of steps */
+  /** Steps — describe goals, not tool sequences */
   steps: Array<{{
     id: string;
     description: string;
   }}>;
-  /** Plan goal */
+  /** What this analysis is trying to achieve */
   goal: string;
-  /** Plan title */
+  /** Short plan title */
   title: string;
 }}
 ```
 
-EXAMPLE JSON OUTPUT (market analysis request):
+EXAMPLE — Standard analysis request (e.g. "carikan entry XAUUSD sekarang"):
 {{
-    "message": "Baik, saya akan analisa XAUUSD sekarang menggunakan protokol adaptif — scan kondisi pasar dulu, lalu pilih strategi yang tepat.",
-    "goal": "Menghasilkan sinyal trading XAUUSD yang akurat berdasarkan kondisi pasar aktual",
-    "title": "Analisis Adaptif XAUUSD",
+    "message": "Baik, saya akan baca kondisi XAUUSD sekarang — mulai dari gambaran besar dulu, lalu masuk ke detail untuk cari area entry yang tepat.",
+    "goal": "Menemukan posisi entry XAUUSD terbaik berdasarkan kondisi pasar aktual saat ini",
+    "title": "Analisis Entry XAUUSD",
     "language": "id",
     "steps": [
         {{
             "id": "1",
-            "description": "Scan pasar XAUUSD — cek sesi aktif (forex-market-hours), harga terkini (deriv-market-snapshot), volatilitas ATR H1, dan kekuatan trend ADX H4"
+            "description": "Baca kondisi pasar XAUUSD sekarang — sesi aktif, harga terkini, seberapa volatile market, apakah ada arah yang jelas atau market sedang diam. Cek juga apakah ada event ekonomi penting dalam waktu dekat."
         }},
         {{
             "id": "2",
-            "description": "Diagnosis regime pasar dari hasil scan: tentukan apakah Regime A (trend kuat), B (transisi), C (ranging), atau D (volatilitas spike) — lalu jalankan analisis mendalam dengan indikator yang sesuai regime tersebut"
+            "description": "Masuk lebih dalam — temukan level-level kunci, pahami di mana price berada relatif terhadap tren besarnya, dan baca sinyal-sinyal momentum untuk menentukan apakah ini setup yang valid untuk entry."
         }},
         {{
             "id": "3",
-            "description": "Sampaikan keputusan final: BUY/SELL/TUNGGU dengan entry, SL (ATR-based), TP1, TP2, confidence, konteks sesi, dan peringatan risiko"
+            "description": "Sampaikan keputusan: BUY, SELL, atau TUNGGU — lengkap dengan entry, stop loss, TP1, TP2, keyakinan, dan alasan yang jelas berdasarkan semua yang ditemukan."
+        }}
+    ]
+}}
+
+EXAMPLE — Simple data request (e.g. "berapa harga BTCUSDT sekarang"):
+{{
+    "message": "Saya cek harga BTCUSDT sekarang.",
+    "goal": "Mendapatkan harga terkini BTCUSDT",
+    "title": "Harga BTCUSDT",
+    "language": "id",
+    "steps": [
+        {{
+            "id": "1",
+            "description": "Ambil harga terkini BTCUSDT dan informasi dasar pasar saat ini."
+        }}
+    ]
+}}
+
+EXAMPLE — Multi-asset request (e.g. "analisa XAUUSD dan EURUSD"):
+{{
+    "message": "Saya akan analisa kedua aset ini — baca kondisi masing-masing, lalu bandingkan dan berikan keputusan untuk keduanya.",
+    "goal": "Menghasilkan sinyal trading untuk XAUUSD dan EURUSD berdasarkan kondisi pasar aktual",
+    "title": "Analisis XAUUSD & EURUSD",
+    "language": "id",
+    "steps": [
+        {{
+            "id": "1",
+            "description": "Baca kondisi pasar XAUUSD — sesi, harga, volatilitas, dan apakah ada arah yang jelas."
+        }},
+        {{
+            "id": "2",
+            "description": "Baca kondisi pasar EURUSD — sesi, harga, volatilitas, dan apakah ada arah yang jelas."
+        }},
+        {{
+            "id": "3",
+            "description": "Analisis mendalam XAUUSD — temukan level kunci, baca struktur dan momentum, tentukan setup."
+        }},
+        {{
+            "id": "4",
+            "description": "Analisis mendalam EURUSD — temukan level kunci, baca struktur dan momentum, tentukan setup."
+        }},
+        {{
+            "id": "5",
+            "description": "Sampaikan keputusan untuk keduanya: entry, SL, TP, dan mana yang setup-nya lebih kuat hari ini."
         }}
     ]
 }}
@@ -101,19 +136,17 @@ Note on attachments:
 """
 
 UPDATE_PLAN_PROMPT = """
-You are updating the plan based on the latest step execution result.
+You are updating the remaining plan steps based on the latest execution result.
 
-MARKET ANALYSIS UPDATE RULES:
-- If the scan step (Step 1) reveals Regime D (volatility spike): remove remaining analysis steps and replace with a single step to notify the user that no safe entry exists.
-- If the scan reveals the market session is closed or extremely low-liquidity: add a note to the analysis step to reduce confidence and widen SL.
-- If an indicator step fails (tool error): adapt — replace with an alternative tool that provides similar data.
-- If confluence from Step 2 is < 58%: update Step 3 to deliver a TUNGGU decision, no need to run further indicator tools.
+ADAPTATION RULES:
+- Read what the execution agent found and decide if the remaining steps still make sense.
+- If the market picture is now clear enough to skip a step, remove it.
+- If something unexpected was found (extreme volatility, imminent news event, no directional conviction), adapt the remaining steps to reflect the new reality.
+- If a tool failed, the next step should note that and suggest an alternative approach.
+- Never change the plan goal — only adapt how to get there.
+- Only output uncompleted steps, starting from the first one that hasn't been done.
 
-General rules:
-- You can delete, add, or modify remaining steps — but never change the plan goal
-- Only re-plan uncompleted steps — don't touch completed ones
-- Delete steps that are no longer necessary given the new information
-- Output step IDs starting from the first uncompleted step
+Keep step descriptions goal-oriented. Do not prescribe specific tools.
 
 Return format requirements:
 - Must return JSON format that complies with the following TypeScript interface
@@ -128,16 +161,26 @@ interface UpdatePlanResponse {{
 }}
 ```
 
-EXAMPLE JSON OUTPUT:
+EXAMPLE — After a scan reveals a volatile, directionless market:
 {{
     "steps": [
         {{
             "id": "2",
-            "description": "Regime A terkonfirmasi (ADX=31, trending up). Jalankan deriv-smart-analysis untuk analisis multi-timeframe penuh, lalu konfirmasi dengan deriv-macd dan deriv-ema periode 50 dan 200"
+            "description": "Kondisi pasar tidak mendukung entry: volatilitas tinggi dan tidak ada arah yang jelas. Periksa apakah ada event ekonomi penting yang menyebabkan kondisi ini, lalu sampaikan kepada user kenapa TUNGGU adalah keputusan yang tepat saat ini dan apa yang harus ditunggu."
+        }}
+    ]
+}}
+
+EXAMPLE — After a scan reveals a clear strong trend:
+{{
+    "steps": [
+        {{
+            "id": "2",
+            "description": "Tren kuat sudah terkonfirmasi dari scan. Sekarang temukan area entry yang presisi — cari zona pullback yang valid, level support/resistance terdekat, dan konfirmasi momentum. Fokus pada menentukan titik entry, SL, dan TP yang tepat."
         }},
         {{
             "id": "3",
-            "description": "Sampaikan keputusan final dengan entry, SL ATR-based, TP1/TP2, confidence level, dan konteks sesi London"
+            "description": "Sampaikan keputusan trading lengkap dengan semua parameter dan reasoning yang jelas."
         }}
     ]
 }}
