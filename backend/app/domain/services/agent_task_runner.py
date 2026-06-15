@@ -1,0 +1,242 @@
+from typing import Optional, AsyncGenerator, List
+import asyncio
+import logging
+import os
+try:
+    import debugpy
+except ImportError:
+    debugpy = None
+from pydantic import TypeAdapter
+from app.domain.models.message import Message, VisionImage, is_vision_capable
+from app.domain.services import file_extractor
+from app.domain.models.event import (
+    BaseEvent,
+    ErrorEvent,
+    TitleEvent,
+    MessageEvent,
+    MessageChunkEvent,
+    DoneEvent,
+    ToolEvent,
+    WaitEvent,
+    SearchToolContent,
+    ToolStatus,
+    AgentEvent,
+    McpToolContent,
+    PlanEvent,
+    PlanStatus,
+    StepEvent,
+    StepStatus,
+)
+from app.domain.services.flows.plan_act import PlanActFlow
+from app.domain.external.search import SearchEngine
+from app.domain.external.file import FileStorage
+from app.domain.repositories.agent_repository import AgentRepository
+from app.domain.external.task import TaskRunner, Task
+from app.domain.repositories.session_repository import SessionRepository
+from app.domain.repositories.mcp_repository import MCPRepository
+from app.domain.models.session import SessionStatus
+from app.domain.models.file import FileInfo
+from app.domain.services.tools.mcp import get_mcp_toolkit
+from app.domain.models.tool_result import ToolResult
+from app.domain.models.search import SearchResults
+import base64
+
+logger = logging.getLogger(__name__)
+
+class AgentTaskRunner(TaskRunner):
+    """Agent task that can be cancelled"""
+    def __init__(
+        self,
+        session_id: str,
+        agent_id: str,
+        user_id: str,
+        agent_repository: AgentRepository,
+        session_repository: SessionRepository,
+        file_storage: FileStorage,
+        mcp_repository: MCPRepository,
+        search_engine: Optional[SearchEngine] = None,
+    ):
+        self._session_id = session_id
+        self._agent_id = agent_id
+        self._user_id = user_id
+        self._search_engine = search_engine
+        self._repository = agent_repository
+        self._session_repository = session_repository
+        self._file_storage = file_storage
+        self._mcp_repository = mcp_repository
+        self._mcp_tool = get_mcp_toolkit()
+        self._flow = PlanActFlow(
+            self._agent_id,
+            self._repository,
+            self._session_id,
+            self._session_repository,
+            self._mcp_tool,
+            self._search_engine,
+        )
+
+    async def _put_and_add_event(self, task: Task, event: AgentEvent) -> None:
+        event_id = await task.output_stream.put(event.model_dump_json())
+        event.id = event_id
+        if not isinstance(event, MessageChunkEvent):
+            await self._session_repository.add_event(self._session_id, event)
+
+    async def _pop_event(self, task: Task) -> Optional[AgentEvent]:
+        event_id, event_str = await task.input_stream.pop()
+        if event_str is None:
+            logger.warning(f"Agent {self._agent_id} received empty message from input stream")
+            return None
+        event = TypeAdapter(AgentEvent).validate_json(event_str)
+        event.id = event_id
+        return event
+
+    async def _handle_tool_event(self, event: ToolEvent) -> None:
+        """Generate tool content for UI display."""
+        try:
+            if event.status == ToolStatus.CALLED:
+                if event.tool_name == "search":
+                    search_results: ToolResult[SearchResults] = event.function_result
+                    logger.debug(f"Search tool results: {search_results}")
+                    event.tool_content = SearchToolContent(results=search_results.data.results)
+                elif event.tool_name == "message":
+                    logger.debug(f"Agent {self._agent_id} received message tool event: {event.function_name}")
+                elif event.tool_name == "mcp":
+                    logger.debug(f"Processing MCP tool event: function_result={event.function_result}")
+                    if event.function_result:
+                        if hasattr(event.function_result, 'data') and event.function_result.data:
+                            event.tool_content = McpToolContent(result=event.function_result.data)
+                        elif hasattr(event.function_result, 'success') and event.function_result.success:
+                            result_data = event.function_result.model_dump() if hasattr(event.function_result, 'model_dump') else str(event.function_result)
+                            event.tool_content = McpToolContent(result=result_data)
+                        else:
+                            event.tool_content = McpToolContent(result=str(event.function_result))
+                    else:
+                        logger.warning("MCP tool: No function_result found")
+                        event.tool_content = McpToolContent(result="No result available")
+                else:
+                    logger.warning(f"Agent {self._agent_id} received unknown tool event: {event.tool_name}")
+        except Exception as e:
+            logger.exception(f"Agent {self._agent_id} failed to generate tool content: {e}")
+
+    async def _run_flow(
+        self,
+        message: Message,
+    ) -> AsyncGenerator[AgentEvent, None]:
+        """Run the agent flow."""
+        async for event in self._flow.run(message):
+            if isinstance(event, ToolEvent):
+                await self._handle_tool_event(event)
+            yield event
+
+    async def destroy(self) -> None:
+        """Release MCP connections and other resources."""
+        try:
+            await self._mcp_tool.cleanup()
+        except Exception:
+            pass
+
+    async def on_done(self, task: Task) -> None:
+        """Called when task execution finishes — ensure session status is updated."""
+        try:
+            await self._session_repository.update_status(self._session_id, SessionStatus.COMPLETED)
+        except Exception:
+            pass
+
+    async def run(self, task: Task) -> None:
+        """Process agent's message queue and run the agent's flow"""
+        try:
+            logger.info(f"Agent {self._agent_id} message processing task started")
+
+            mcp_config = await self._mcp_repository.get_mcp_config()
+            await self._mcp_tool.initialized(mcp_config)
+
+            while not await task.input_stream.is_empty():
+                event = await self._pop_event(task)
+                message = ""
+                if isinstance(event, MessageEvent):
+                    message = event.message or ""
+
+                logger.info(f"Agent {self._agent_id} received new message: {message[:50]}...")
+
+                attachments_list = event.attachments if isinstance(event, MessageEvent) and event.attachments else []
+
+                vision_images = []
+                extracted_file_blocks: list[str] = []
+                handled_file_ids: set[str] = set()
+
+                for attachment in attachments_list:
+                    if not attachment.file_id:
+                        continue
+                    ct = attachment.content_type or ""
+                    fname = attachment.filename or ""
+
+                    if is_vision_capable(ct):
+                        try:
+                            file_data, _ = await self._file_storage.download_file(attachment.file_id, self._user_id)
+                            raw = file_data.read()
+                            b64 = base64.b64encode(raw).decode()
+                            vision_images.append(VisionImage(
+                                content_type=ct,
+                                data=b64,
+                            ))
+                            handled_file_ids.add(attachment.file_id)
+                            logger.debug(f"Collected vision image for {fname} ({len(raw)} bytes)")
+                        except Exception as ve:
+                            logger.warning(f"Could not collect vision data for {fname}: {ve}")
+
+                    elif file_extractor.is_extractable(fname, ct):
+                        try:
+                            file_data, _ = await self._file_storage.download_file(attachment.file_id, self._user_id)
+                            raw = file_data.read()
+                            extracted = file_extractor.extract_text(raw, fname, ct)
+                            if extracted.strip():
+                                extracted_file_blocks.append(
+                                    f"<file name=\"{fname}\">\n{extracted}\n</file>"
+                                )
+                                handled_file_ids.add(attachment.file_id)
+                                logger.info(f"Server-extracted {fname} ({len(raw)} bytes → {len(extracted)} chars)")
+                        except Exception as fe:
+                            logger.warning(f"Server extraction failed for {fname}: {fe}")
+
+                if extracted_file_blocks:
+                    files_block = "\n\n".join(extracted_file_blocks)
+                    message = (
+                        f"{message}\n\n"
+                        f"[The following file(s) have been pre-extracted and are ready to analyze. "
+                        f"Use this content directly — do NOT run any extraction commands.]\n\n"
+                        f"{files_block}"
+                    )
+                    logger.info(f"Injected {len(extracted_file_blocks)} extracted file(s) into message")
+
+                message_obj = Message(
+                    message=message,
+                    attachments=[],
+                    vision_images=vision_images,
+                )
+
+                async for event in self._run_flow(message_obj):
+                    await self._put_and_add_event(task, event)
+                    if isinstance(event, TitleEvent):
+                        await self._session_repository.update_title(self._session_id, event.title)
+                    elif isinstance(event, MessageEvent):
+                        await self._session_repository.update_latest_message(self._session_id, event.message, event.timestamp)
+                        await self._session_repository.increment_unread_message_count(self._session_id)
+                    elif isinstance(event, WaitEvent):
+                        await self._session_repository.update_status(self._session_id, SessionStatus.WAITING)
+                        return
+                    if not await task.input_stream.is_empty():
+                        break
+
+            await self._session_repository.update_status(self._session_id, SessionStatus.COMPLETED)
+        except asyncio.CancelledError:
+            logger.info(f"Agent {self._agent_id} task cancelled")
+            await self._put_and_add_event(task, DoneEvent())
+            await self._session_repository.update_status(self._session_id, SessionStatus.COMPLETED)
+        except Exception as e:
+            logger.exception(f"Agent {self._agent_id} task encountered exception: {str(e)}")
+
+            if debugpy and (debugpy.is_client_connected() or os.getenv('ENABLE_DEBUG_BREAK')):
+                debugpy.breakpoint()
+
+            error_event = ErrorEvent(error=str(e))
+            await self._put_and_add_event(task, error_event)
+            await self._session_repository.update_status(self._session_id, SessionStatus.COMPLETED)
