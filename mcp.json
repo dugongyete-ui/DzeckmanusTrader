@@ -34,6 +34,13 @@
       "transport": "stdio",
       "enabled": true,
       "description": "TradingView MCP — 30+ tools: screener, multi-timeframe analysis, backtesting, sentiment, Yahoo Finance news (routed via TV_PROXY_BASE when set)"
+    },
+    "economic-calendar": {
+      "command": "python3",
+      "args": ["/home/runner/workspace/mcp-servers/economic-calendar/server.py"],
+      "transport": "stdio",
+      "enabled": true,
+      "description": "Economic Calendar MCP — real-time calendar: CPI, FOMC, NFP, GDP, PMI, rate decisions and all major economic events with forecast/actual/previous values. Source: ForexFactory (free, no API key)."
     }
   }
 }

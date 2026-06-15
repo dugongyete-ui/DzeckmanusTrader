@@ -1,0 +1,2 @@
+- [Economic Calendar MCP data source](eco-calendar-source.md) — switched from ForexFactory to TradingView Calendar API; ForexFactory rate-limits aggressively (429), TV API is reliable and free.
+- [Economic Calendar importance scale](eco-calendar-importance.md) — TradingView uses numeric importance: -1=N/A, 0=Low, 1=High (max). No "Medium" level. Agent prompt min_impact="High" maps to importance≥1.

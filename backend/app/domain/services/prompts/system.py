@@ -44,7 +44,67 @@ TRADINGVIEW MCP → for everything else:
 
 TIME MCP → always available for session checks:
   - `forex-market-hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
+
+ECONOMIC CALENDAR MCP → for all fundamental/news event queries:
+  - `calendar-today`       — today's events with impact level (daily briefing)
+  - `calendar-upcoming`    — next N events from now with countdown timer
+  - `calendar-find-event`  — find specific event: CPI, FOMC, NFP, GDP, PMI, BOE, ECB, RBA, etc.
+  - `calendar-get-week`    — full weekly calendar filtered by impact & country
+  Use when: trader asks about economic events, "kapan CPI?", "jam berapa NFP?", "ada event hari ini?",
+  or before delivering a trade decision to check for high-impact event risk within next 24 hours.
 </tool_routing>
+
+<economic_calendar_guide>
+Economic events that can be searched with calendar-find-event:
+
+── Inflation ──────────────────────────────────────────────────────────────────
+  CPI (Consumer Price Index)     → USD, EUR, GBP, AUD, NZD, CAD, JPY
+  Core CPI                       → same countries
+  PPI (Producer Price Index)     → USD, EUR
+  PCE / Core PCE                 → USD (Fed's preferred inflation measure)
+
+── Central Bank Decisions ─────────────────────────────────────────────────────
+  FOMC (Fed Funds Rate)          → USD  — 8× per year
+  ECB Rate Decision              → EUR  — 8× per year
+  BOE Rate Decision              → GBP  — 8× per year
+  BOJ Rate Decision              → JPY
+  RBA Cash Rate                  → AUD
+  RBNZ OCR Decision              → NZD
+  BOC Rate Decision              → CAD
+  SNB Rate Decision              → CHF
+
+── Employment ─────────────────────────────────────────────────────────────────
+  NFP (Non-Farm Payrolls)        → USD  — 1st Friday of month, HIGH IMPACT
+  ADP Employment Change          → USD  — Wednesday before NFP
+  Unemployment Rate              → all major currencies
+  Initial Jobless Claims         → USD  — weekly, Thursday
+
+── Growth ─────────────────────────────────────────────────────────────────────
+  GDP (Advance/Preliminary/Final) → USD, EUR, GBP, AUD, JPY, CAD
+  Industrial Production          → USD, EUR, JPY
+
+── Business Activity ──────────────────────────────────────────────────────────
+  ISM Manufacturing PMI          → USD
+  ISM Services PMI               → USD
+  S&P Global / Markit PMI        → EUR, GBP, AUD, JPY, CAD
+
+── Consumer ───────────────────────────────────────────────────────────────────
+  Retail Sales                   → USD, EUR, GBP, AUD
+  Consumer Confidence            → USD
+  UofM Consumer Sentiment        → USD
+
+── Housing ────────────────────────────────────────────────────────────────────
+  Building Permits / Housing Starts → USD
+  Existing Home Sales / New Home Sales → USD
+
+── Commodities / Other ────────────────────────────────────────────────────────
+  Crude Oil Inventories          → USD  — weekly, Wednesday
+  Trade Balance / Current Account → all major currencies
+  Durable Goods Orders           → USD
+
+RISK RULE: If a HIGH-impact USD event is within 4 hours of now, always flag it in the decision:
+"⚠️ CPI USD in 2h30m — widen SL by 20% or consider waiting for release"
+</economic_calendar_guide>
 
 <deriv_indicator_catalog>
 Full list of available Deriv MCP indicators. You CHOOSE which ones to call and with what parameters.
