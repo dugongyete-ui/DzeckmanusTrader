@@ -282,6 +282,8 @@ class PlannerAgent(BaseAgent):
                 if isinstance(event, MessageEvent):
                     logger.info(event.message)
                     parsed_response = await self._parse_json(event.message)
+                    if parsed_response is None:
+                        raise ValueError("Planner returned non-JSON response during create_plan")
                     plan = Plan.model_validate(parsed_response)
                     yield PlanEvent(status=PlanStatus.CREATED, plan=plan)
                     return
@@ -312,6 +314,8 @@ class PlannerAgent(BaseAgent):
                 if isinstance(event, MessageEvent):
                     logger.info(event.message)
                     parsed_response = await self._parse_json(event.message)
+                    if parsed_response is None:
+                        raise ValueError("Planner returned non-JSON response during create_plan (text-only fallback)")
                     plan = Plan.model_validate(parsed_response)
                     yield PlanEvent(status=PlanStatus.CREATED, plan=plan)
                 else:
@@ -323,8 +327,12 @@ class PlannerAgent(BaseAgent):
             if isinstance(event, MessageEvent):
                 logger.debug(f"Planner agent update plan: {event.message}")
                 parsed_response = await self._parse_json(event.message)
+                if parsed_response is None:
+                    logger.warning("Planner returned non-JSON response during update_plan, keeping current plan")
+                    yield PlanEvent(status=PlanStatus.UPDATED, plan=plan)
+                    return
                 updated_plan = Plan.model_validate(parsed_response)
-                new_steps = [Step.model_validate(step) for step in updated_plan.steps]
+                new_steps = [Step.model_validate(s) for s in updated_plan.steps]
                 
                 # Find the index of the first pending step
                 first_pending_index = None

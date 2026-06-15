@@ -65,6 +65,13 @@ class ExecutionAgent(BaseAgent):
             elif isinstance(event, MessageEvent):
                 step.status = ExecutionStatus.COMPLETED
                 parsed_response = await self._parse_json(event.message)
+                if parsed_response is None:
+                    logger.warning("Execution agent returned non-JSON response for step result")
+                    step.success = False
+                    step.result = event.message or "No result returned."
+                    step.error = "LLM returned a non-JSON response."
+                    yield StepEvent(status=StepStatus.COMPLETED, step=step)
+                    return
                 new_step = Step.model_validate(parsed_response)
                 step.success = new_step.success
                 step.result = new_step.result
@@ -165,6 +172,10 @@ class ExecutionAgent(BaseAgent):
             if isinstance(event, MessageEvent):
                 logger.debug(f"Execution agent summary: {event.message}")
                 parsed_response = await self._parse_json(event.message)
+                if parsed_response is None:
+                    logger.warning("Summarize fallback returned non-JSON, using raw message")
+                    yield MessageEvent(message=event.message)
+                    continue
                 msg_obj = Message.model_validate(parsed_response)
                 yield MessageEvent(message=msg_obj.message)
                 continue
