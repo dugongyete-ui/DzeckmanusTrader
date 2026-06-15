@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-**AI Dzeck** is an autonomous AI trading analyst platform. Users chat with an agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time using MCP-connected data sources. The agent is **market-aware and adaptive** — it scans current market conditions first, diagnoses the market regime, then self-configures its indicator set before delivering a decision. Analysis streams live to the frontend.
+**AI Dzeck** is an autonomous AI trading analyst platform. Users chat with an agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time using MCP-connected data sources. The agent operates with **full autonomous reasoning** — it reads the market as a professional trader would, decides for itself which tools and parameters to use, and builds its analysis organically from what the data tells it. There are no hardcoded indicator sequences, no prescribed regime rules, and no fixed parameter defaults. Every analysis is unique to the current market state.
 
 | Service | Stack | Port (dev) | Entry Point |
 |---|---|---|---|
@@ -53,9 +53,10 @@ dzeck/
 │   ├── deriv/         # Deriv platform — Forex/Gold indicators & analysis
 │   ├── tradingview/   # TradingView wrapper — Crypto/Stocks (uses tradingview-mcp package)
 │   ├── time/          # Time & forex market session tools
+│   ├── economic-calendar/ # Real-time economic calendar (TradingView Calendar API)
 │   ├── mongodb/       # MongoDB Atlas query tools
 │   └── redis/         # Redis Cloud monitor tools
-├── mcp.json           # MCP server definitions (time, mongodb, redis, deriv, tradingview)
+├── mcp.json           # MCP server definitions
 ├── .env.example       # Environment variable template
 └── replit.md          # Replit project overview and user preferences
 ```
@@ -68,42 +69,33 @@ dzeck/
 
 The agent uses a **Plan → Execute → Update** loop (`backend/app/domain/services/flows/plan_act.py`):
 
-1. **Planner** (`prompts/planner.py`) — creates a step-by-step plan structured around the 4-phase adaptive protocol
-2. **Execution agent** (`prompts/execution.py`) — runs each step, calls tools, interprets results
-3. **Plan updater** — revises remaining steps based on what the execution found (e.g. regime changes the next tool selection)
-4. **Summarizer** — delivers the final structured decision to the user
+1. **Planner** (`prompts/planner.py`) — decides how many steps are needed and describes the *goal* of each step, not the tools to use
+2. **Execution agent** (`prompts/execution.py`) — reads the market, reasons about what it needs to know, chooses tools and parameters autonomously, interprets results in context
+3. **Plan updater** — revises remaining steps based on what was actually found (e.g. extreme volatility reshapes the next steps)
+4. **Summarizer** — delivers the final decision to the user
 5. Results stream to frontend via **SSE**
 
-### Adaptive Analysis Protocol (4 Phases)
+### Autonomous Reasoning Model
 
-Every market analysis request mandatorily goes through four phases. This is enforced in all three prompt files.
+The agent does **not** follow a fixed protocol or indicator checklist. It operates like a professional trader with full market awareness:
 
 ```
-Phase 0 — SCAN
-  Read raw market state: session activity, current price, ATR (volatility), ADX (trend strength)
-  Tools: forex-market-hours → deriv-market-snapshot → deriv-atr → deriv-technical-analysis
-         (or coin_analysis for TradingView assets)
-
-Phase 1 — DIAGNOSE
-  Classify market into one of four regimes based on scan data:
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ Regime A — Strong Trend    : ADX > 25, clear directional move  │
-  │ Regime B — Weak/Transition : ADX 20-25, mixed signals          │
-  │ Regime C — Ranging         : ADX < 20, price bouncing S/R      │
-  │ Regime D — Volatility Spike: ATR > 150% of average → NO ENTRY  │
-  └─────────────────────────────────────────────────────────────────┘
-
-Phase 2 — SELF-CONFIGURE
-  Choose indicator set and parameters appropriate for the diagnosed regime:
-  Regime A → trend-following  : deriv-smart-analysis + deriv-macd + deriv-ema(50/200)
-  Regime B → confirmation     : deriv-smart-analysis + deriv-rsi + deriv-bbands
-  Regime C → mean-reversion   : deriv-stoch + deriv-rsi + deriv-bbands + S/R levels
-  Regime D → standby          : notify user, do NOT run entry analysis
-
-Phase 3 — DECIDE
-  Synthesize results into a structured decision:
-  Regime → Key signals → BUY/SELL/TUNGGU → Entry / SL (ATR-based) / TP1 / TP2 / Risk %
+1. READ   — look at the current market state (price, session, volatility, direction)
+2. THINK  — "what do I still need to understand before I can make a decision?"
+3. CHOOSE — select the tool that best answers that question; set parameters based on
+            what the current market conditions call for, not defaults
+4. INTERPRET — synthesize the result with everything already known
+5. REPEAT — until enough conviction exists to decide, or until TUNGGU is clearly right
 ```
+
+Before calling any tool, the agent states **why** it needs it.
+After reading a result, the agent states **what it means** in context — not just the raw numbers.
+
+This means:
+- No two analyses are identical, even for the same asset
+- The agent may call RSI(9) one day and RSI(21) the next — based on current volatility
+- The agent may use Ichimoku on a trending day and skip it entirely on a ranging day
+- The agent explains its reasoning at every step, making the analysis transparent
 
 ### Active Toolkits
 
@@ -117,16 +109,19 @@ Phase 3 — DECIDE
 
 | Server | Key Tools | Instruments |
 |---|---|---|
-| `time` | `forex-market-hours` | All — session/time checks |
-| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
-| `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_breakout_scanner`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
+| `time` | `forex-market-hours`, `get-current-time`, `convert-timezone` | All — session/time checks |
+| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
+| `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_confirmation_analysis`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
+| `economic-calendar` | `calendar-today`, `calendar-upcoming`, `calendar-find-event`, `calendar-get-week` | All — fundamental event queries |
 | `mongodb` | find, aggregate, count | Signal storage and history |
 | `redis` | get/set, stats | Real-time data cache |
 
 ### Tool Routing Rule
 
+This is a **technical constraint**, not a strategy rule — it reflects what each data source actually provides:
+
 ```
-Deriv MCP  → ONLY for Deriv platform: frxXAUUSD, frxEURUSD, frxGBPUSD, frxXAGUSD, etc.
+Deriv MCP   → ONLY for Deriv platform instruments: frxXAUUSD, frxEURUSD, frxGBPUSD, frxXAGUSD, etc.
 TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
 ```
 
@@ -134,9 +129,16 @@ TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
 
 | File | Role |
 |---|---|
-| `prompts/system.py` | Agent identity + full adaptive protocol definition + regime rules + confidence thresholds |
-| `prompts/planner.py` | Plan creation rules — always generates 3-step scan→configure→decide structure for analysis |
-| `prompts/execution.py` | Step execution rules — which tools to call per regime, notification cadence, decision format |
+| `prompts/system.py` | Agent identity + tool catalog (what each tool measures) + tool routing + decision format + security rules |
+| `prompts/planner.py` | Goal-oriented planning — describes *what* to understand, not *which tools* to call. Step count varies by complexity. |
+| `prompts/execution.py` | Reasoning-first execution — agent explains why before calling each tool, interprets results in context, chooses all parameters autonomously |
+
+#### How to modify agent behavior
+
+- To change **what the agent is** and what tools it knows about → edit `system.py`
+- To change **how plans are structured** (step granularity, how goals are described) → edit `planner.py`
+- To change **how the agent reasons** during execution (notification style, parameter logic, decision format) → edit `execution.py`
+- **Always restart the Backend API workflow** after any prompt change
 
 ---
 
@@ -214,9 +216,10 @@ pnpm build             # production build (catches TS + template errors)
 1. Ensure both workflows are running
 2. Open the app preview (port 5000)
 3. Register/login (or set `AUTH_PROVIDER=none`)
-4. Create a session, send: `"Analisa XAUUSD sekarang"`
-5. Verify the agent goes through Scan → Diagnose → Configure → Decide phases in the backend logs
-6. Check backend logs in the **Backend API** workflow console
+4. Create a session, send: `"Carikan entry XAUUSD sekarang"`
+5. Observe in backend logs that the agent reasons through its tool choices organically
+6. The agent should explain *why* it calls each tool before calling it
+7. Check backend logs in the **Backend API** workflow console
 
 ---
 
@@ -232,21 +235,15 @@ pnpm build             # production build (catches TS + template errors)
 - No enforced linter/formatter (no Ruff, Black, or Flake8 configured)
 - Async-first: use `async def` for route handlers and service methods
 
-### Modifying Agent Behavior
-
-All agent behavior is controlled via the three prompt files in `backend/app/domain/services/prompts/`:
-- To change how the agent thinks → edit `system.py`
-- To change how plans are structured → edit `planner.py`
-- To change how steps are executed → edit `execution.py`
-- Always restart the **Backend API** workflow after prompt changes
-
 ### Adding a New MCP Server
 
 1. Add the server script to `mcp-servers/<name>/server.py`
 2. Register it in `mcp.json` with `"enabled": true`
-3. Add tool routing rules in `system.py` under `<tool_routing>`
-4. Add relevant execution rules in `execution.py` for the new tool set
+3. Add the server and its tools to the `<tool_catalog>` in `system.py` — describe what each tool **measures** and what **question** it answers
+4. Add tool routing rules in `system.py` under `<tool_routing>` if the server has platform-specific instruments
 5. Restart **Backend API**
+
+> Do NOT add prescriptive rules about when to use the new tools. The catalog description is enough — the agent will decide when to use them based on its own reasoning.
 
 ### Frontend (TypeScript / Vue)
 
@@ -273,14 +270,21 @@ Mappings from tool name → icon → component live in `frontend/src/constants/t
 ### Backend Logs
 Check the **Backend API** workflow console in Replit, or read `/tmp/logs/Backend_API_*.log`.
 
-Look for these log patterns to trace the adaptive protocol:
+Look for these log patterns to trace agent execution:
 ```
 "Agent started processing message"   → planner triggered
-"created plan with N steps"          → plan created (should be 3 steps for analysis)
-"executing step 1"                   → Phase 0 scan running
-"executing step 2"                   → Phase 1+2 diagnose & configure running
-"executing step 3"                   → Phase 3 decision delivery
+"created plan with N steps"          → plan created (varies by request complexity)
+"executing step 1"                   → first step running (market read)
+"executing step 2"                   → deeper analysis running
+"executing step 3"                   → decision delivery (if 3-step plan)
 "state changed ... to COMPLETED"     → analysis finished
+```
+
+In the execution output, healthy autonomous reasoning looks like:
+```
+"Saya ingin tahu seberapa kuat tren ini — saya panggil deriv-atr dulu untuk ukur volatilitas"
+"ATR = 1.82, rata-rata sekitar 1.45 — volatilitas sedikit di atas normal tapi masih aman"
+"Karena ada arah yang jelas, saya perlu check struktur besar — pilih Ichimoku H4"
 ```
 
 ### Frontend Logs
@@ -290,9 +294,9 @@ Check the **Start application** workflow console, or the browser DevTools consol
 
 | Issue | Likely Cause | Fix |
 |---|---|---|
-| Agent jumps straight to decision without scanning | Prompt cache from old version | Restart Backend API workflow |
+| Agent calls tools without explaining why | Old prompt cache | Restart Backend API workflow |
 | MCP tool returns empty / error | MCP server not running or wrong symbol format | Check `mcp.json`, verify symbol routing (Deriv vs TradingView) |
-| Agent always says TUNGGU | Confluence consistently < 58% | Check ATR/ADX values in logs — may be a market condition, not a bug |
+| Agent always says TUNGGU | Genuine market uncertainty or conflicting signals — this is correct behavior | Check ATR/volatility in logs; may be a real market condition |
 | TradingView tools fail | `TV_PROXY_BASE` misconfigured or scanner.tradingview.com blocked | Set/check `TV_PROXY_BASE` env var |
 
 ### Resetting State

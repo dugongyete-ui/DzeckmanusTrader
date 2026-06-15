@@ -1,6 +1,6 @@
 # AI Dzeck
 
-Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time. The agent is **market-aware and adaptive** — it scans market conditions first, diagnoses the regime, self-configures its indicator set, then delivers a structured trading decision. All analysis streams live to the frontend.
+Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time. The agent operates with **full autonomous reasoning** — like a professional trader given consciousness. It reads the market from scratch, decides for itself which tools and parameters to use, and builds its analysis organically from what the data tells it. No hardcoded indicator sequences. No prescribed rules. Every analysis is a fresh, adaptive response to current market conditions.
 
 ## Architecture
 
@@ -11,18 +11,22 @@ Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat wi
 
 **Database:** MongoDB Atlas (cloud) + Redis Cloud (Asia Southeast)
 
-## Adaptive Analysis Protocol
+## How the Agent Thinks
 
-Every market analysis goes through 4 mandatory phases:
+The agent does not follow a checklist. It reasons like a professional trader:
 
-| Phase | What happens |
-|---|---|
-| **0 — Scan** | Session check, economic calendar risk check, price snapshot, ATR (volatility), ADX (trend strength) |
-| **1 — Diagnose** | Classify market regime: A (strong trend), B (transition), C (ranging), D (volatility spike) |
-| **2 — Configure** | Self-select indicators for the regime — trend tools for A, oscillators for C, standby for D |
-| **3 — Decide** | Deliver BUY/SELL/TUNGGU with Entry, SL (ATR-based), TP1, TP2, confidence, risk % |
+1. **Read** — understand the current market state (price, session, volatility, trend)
+2. **Think** — "what do I still need to know before I can make a decision?"
+3. **Choose** — pick the tool that answers that question; set parameters based on current conditions
+4. **Interpret** — synthesize the result with everything already known
+5. **Repeat** — until there is enough conviction to decide, or until TUNGGU is clearly right
 
-## MCP Servers (6 servers — 72 tools total)
+Before calling any tool, the agent explains **why** it needs it.
+After reading a result, the agent explains **what it means** in context.
+
+This means the agent may use RSI(9) one session and RSI(21) the next — based on what the market demands. It may use Ichimoku on a trending day and skip it entirely on a ranging day. No two analyses are identical.
+
+## MCP Servers (6 servers — ~72 tools total)
 
 All servers defined in `mcp.json`, launched as stdio subprocesses.
 
@@ -31,24 +35,24 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 | **time** | 4 | Session clock, forex market hours (London/NY/Tokyo/Sydney), timezone conversion |
 | **mongodb** | 5 | MongoDB Atlas monitoring — find, count, aggregate, stats |
 | **redis** | 6 | Redis Cloud monitoring — keys, values, stats, flush |
-| **deriv** | 24 | Deriv platform: Gold (frxXAUUSD), Forex pairs — price, candles, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, Smart Analysis, etc. |
-| **tradingview** | 29 | Crypto/Stocks/Indices — screener, multi-timeframe analysis, volume confirmation, backtesting, market sentiment, Yahoo Finance news (proxy via `TV_PROXY_BASE`) |
+| **deriv** | 24 | Deriv platform: Gold (frxXAUUSD), Forex pairs — price, candles, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, CCI, Williams%R, Keltner, Donchian, Parabolic SAR, Smart Analysis, etc. |
+| **tradingview** | 29 | Crypto/Stocks/Indices — screener, multi-timeframe analysis, volume confirmation, backtesting, market sentiment (proxy via `TV_PROXY_BASE`) |
 | **economic-calendar** | 4 | Real-time economic calendar: CPI, FOMC, NFP, GDP, PMI, all central bank decisions — with forecast/actual/previous and WIB countdown. Source: TradingView Calendar API (60-min disk cache at `/tmp/ecocal_cache.json`) |
 
 ### Economic Calendar Tools
 - `calendar-today` — all events releasing today with impact level and actual values
-- `calendar-upcoming` — next N high-impact events from now with countdown timer (called in every Phase 0 scan)
+- `calendar-upcoming` — next N high-impact events from now with countdown timer
 - `calendar-find-event` — find specific event: FOMC, BOJ, CPI, NFP, GDP, PMI, BOE, RBA, etc.
 - `calendar-get-week` — full calendar for next 3 weeks grouped by day
 
-### Tool Routing Rules
+### Tool Routing (Technical Constraint — Not a Strategy Rule)
 - **Deriv MCP** → `frxXAUUSD`, `frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, all `frx*` pairs
 - **TradingView MCP** → `BINANCE:BTCUSDT`, `BINANCE:ETHUSDT`, `NASDAQ:AAPL`, `SP:SPX`, all crypto/stocks/indices
 - **Economic Calendar MCP** → all fundamental queries: "kapan CPI?", "ada event hari ini?", news risk check before entry
 
 ## Agent Toolkits
 
-- **MCP toolkit** — 6 servers, 72 tools (data, indicators, calendar, DB monitoring)
+- **MCP toolkit** — 6 servers, ~72 tools (data, indicators, calendar, DB monitoring)
 - **Search toolkit** — Web search via Tavily for real-time news and in-depth research
 - **Message toolkit** — `message-notify-user` (live progress), `message-ask-user` (clarification)
 
@@ -58,19 +62,24 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 
 | File | Role |
 |---|---|
-| `system.py` | Agent identity, tool routing rules, adaptive protocol phases, regime classification, economic calendar guide, security rules |
-| `planner.py` | Plan structure — always: scan → diagnose+configure → decide. Handles multi-asset, file attachments, conversational vs analysis routing |
-| `execution.py` | Per-phase execution logic: Phase 0 scan order, Regime A/B/C/D indicator selection with adaptive parameters, decision format (Entry/SL/TP/Confidence), TUNGGU conditions |
+| `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format, security rules |
+| `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. |
+| `execution.py` | Reasoning-first execution — agent explains why before each tool call, interprets results in context, sets all parameters autonomously based on current market state |
 
 After editing any prompt file, restart the **Backend API** workflow.
 
-### Market Regimes
-| Regime | Condition | Indicator Set |
-|---|---|---|
-| **A** | ADX > 25 (strong trend) | Smart Analysis, Ichimoku, Supertrend, MACD, EMA(21/50/200), Fibonacci, Pivots, Heikin-Ashi |
-| **B** | ADX 20–25 (transition) | Smart Analysis, RSI(14), BB, Williams%R, Pivots, optional Heikin-Ashi |
-| **C** | ADX < 20 (ranging) | Stoch(5), RSI(9), CCI, Williams%R, BB, Technical Analysis, Pivots, Heikin-Ashi |
-| **D** | ATR spike > 150% avg | STOP — no entry, notify user, wait for ATR to normalize |
+## What Autonomous Means Here
+
+The agent decides everything based on what it finds — no hardcoded rules:
+
+| Aspect | How it works |
+|---|---|
+| **Which indicators to use** | Agent chooses based on what it needs to understand at that moment |
+| **Which parameters to set** | Agent sets based on current volatility, timeframe, and market character |
+| **How many tools to call** | Agent calls as many or as few as needed to reach conviction |
+| **How to interpret results** | Agent synthesizes in context of everything it already knows |
+| **When to say TUNGGU** | Agent judges honestly — conflicting signals, extreme volatility, imminent news |
+| **Decision delivery** | Agent describes the market in its own words, not a regime label |
 
 ## Frontend Pages & Components
 
@@ -117,4 +126,5 @@ All configured in Replit Secrets:
 - API keys stay in Replit Secrets (personal project)
 - No Docker — all services run directly in the Replit container
 - MongoDB Atlas + Redis Cloud for persistence (no local DB)
+- Agent is reasoning-first and fully autonomous — do not add hardcoded indicator rules back to prompts
 - Both English and Chinese documentation must be kept in sync when updating docs
