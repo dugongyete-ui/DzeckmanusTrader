@@ -68,7 +68,6 @@ python3 -m pip install $PIP_FLAGS -q \
   "pyjwt[crypto]>=2.8.0" \
   "pymongo>=4.14.0" \
   "sse-starlette>=3.0.3" \
-  "websockets>=15.0.1" \
   "httpx>=0.28.1" \
   "cryptography>=3.4.8"
 
@@ -80,21 +79,13 @@ echo "[3/5] Installing AI/LLM dependencies..."
 
 # 3a. OpenAI client
 python3 -m pip install $PIP_FLAGS -q \
-  "openai>=1.58.1,<3.0.0" \
-  "anthropic>=0.40.0,<2.0.0"
+  "openai>=1.58.1,<3.0.0"
 
 # 3b. LangChain ecosystem
 python3 -m pip install $PIP_FLAGS -q \
   "langchain>=0.3.0" \
   "langchain-core>=0.3.0" \
-  "langchain-openai>=0.3.0" \
-  "langchain-anthropic>=0.3.0" \
-  "langchain-ollama>=0.2.0" \
-  "langchain-community>=0.3.0"
-
-# 3c. DeepSeek (may not exist on all registries)
-python3 -m pip install $PIP_FLAGS -q "langchain-deepseek>=0.1.0" 2>/dev/null || \
-  echo "      INFO: langchain-deepseek not available, skipping"
+  "langchain-openai>=0.3.0"
 
 echo "      AI/LLM dependencies installed"
 
@@ -105,13 +96,9 @@ echo "[4/5] Installing utility dependencies..."
 python3 -m pip install $PIP_FLAGS -q \
   "curl-cffi>=0.14.0" \
   "beautifulsoup4>=4.12.0" \
-  "markdownify>=1.2.0" \
   "tavily-python>=0.5.0" \
   "mcp>=1.9.0" \
-  "rich>=14.2.0" \
-  "async-lru>=2.0.0" \
-  "debugpy>=1.8.17" \
-  "duckduckgo-search>=6.0.0"
+  "debugpy>=1.8.17"
 
 # ── 4a. MCP server dependencies ───────────────────────────────────────────────
 echo "      Installing MCP server dependencies..."
