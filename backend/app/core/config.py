@@ -69,11 +69,7 @@ class Settings(BaseSettings):
     extend_system_message: str | None = None     # extra instructions appended to all agent system prompts
 
     # Search engine configuration
-    search_provider: str | None = "bing_web"  # "baidu", "baidu_web", "google", "bing", "bing_web", "tavily"
-    baidu_search_api_key: str | None = None
-    bing_search_api_key: str | None = None
-    google_search_api_key: str | None = None
-    google_search_engine_id: str | None = None
+    search_provider: str | None = "tavily"
     tavily_api_key: str | None = None
     
     # Google Analytics configuration
