@@ -51,7 +51,7 @@ def _normalize_binance_symbol(symbol: str) -> str:
         return "BTCUSDT"
     if "ETHUSDT" in s:
         return "ETHUSDT"
-    if "SOLUSDT" in s or "SOLUSDT" in s:
+    if "SOLUSDT" in s:
         return "SOLUSDT"
     if "BNBUSDT" in s:
         return "BNBUSDT"
@@ -63,6 +63,12 @@ def _normalize_binance_symbol(symbol: str) -> str:
         return "DOGEUSDT"
     if "LINKUSDT" in s:
         return "LINKUSDT"
+    if "AVAXUSDT" in s:
+        return "AVAXUSDT"
+    if "DOTUSDT" in s:
+        return "DOTUSDT"
+    if "POLUSDT" in s or "MATICUSDT" in s:
+        return "POLUSDT"
     # Generic: strip exchange prefix
     if ":" in symbol:
         return symbol.split(":")[-1].upper()

@@ -214,6 +214,7 @@ Use this catalog to decide — based on what you currently know and what you sti
   backtest_strategy
     Answers: How has a particular strategy performed historically on this asset?
     Context: Use to validate your current thesis has a positive expectancy.
+             Valid strategy names: rsi, bollinger, macd, ema_cross, supertrend, donchian
 
 ── SENTIMENT TOOLS (crypto only — Binance Futures data, free, real-time) ─────
   sentiment-ls-ratio (symbol, period, limit)

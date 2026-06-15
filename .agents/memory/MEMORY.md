@@ -1,2 +1,5 @@
 - [Economic Calendar MCP data source](eco-calendar-source.md) — switched from ForexFactory to TradingView Calendar API; ForexFactory rate-limits aggressively (429), TV API is reliable and free.
 - [Economic Calendar importance scale](eco-calendar-importance.md) — TradingView uses numeric importance: -1=N/A, 0=Low, 1=High (max). No "Medium" level. Agent prompt min_impact="High" maps to importance≥1.
+- [TradingView MCP tool audit](tv-mcp-audit.md) — all 29 tools in _TRADINGVIEW_ALLOWED verified against actual package; 3 bugs found and fixed; Yahoo Finance get_live_price blocked in Replit (graceful error).
+- [Sentiment MCP symbol normalizer](sentiment-normalizer.md) — fixed duplicate SOLUSDT check; MATICUSDT deprecated on Binance Futures (migrated to POLUSDT); normalizer now handles AVAXUSDT, DOTUSDT, POLUSDT/MATICUSDT.
+- [Backtest strategy valid names](backtest-strategies.md) — backtest_strategy tool only accepts: rsi, bollinger, macd, ema_cross, supertrend, donchian. Added to system prompt.
