@@ -1,5 +1,5 @@
 <template>
-  <div class="page" :class="{ dark: theme === 'dark' }">
+  <div class="page" :class="{ dark: theme === 'dark', 'is-loaded': isLoaded }">
 
     <!-- Navbar -->
     <nav class="nav">
@@ -21,25 +21,19 @@
 
     <!-- Main -->
     <main class="main">
-      <h1 class="headline">What can I do for you?</h1>
+      <div class="hero-section">
+        <h1 class="headline fade-up-1">Command your analytical edge.</h1>
+        <p class="sub-headline fade-up-2">Autonomous market intelligence. No fixed rules. Just adaptive reasoning across Forex, Crypto, Gold, and Stocks.</p>
+      </div>
 
       <!-- Input box -->
-      <div class="input-wrap">
+      <div class="input-wrap fade-up-3">
         <div class="input-box" :class="{ focused: isFocused }">
-          <!-- Active category tag -->
-          <div v-if="activeCategory" class="category-tag">
-            <component :is="activeCategory.icon" :size="12" />
-            {{ activeCategory.label }}
-            <button class="tag-remove" @click.stop="clearCategory">
-              <X :size="11" />
-            </button>
-          </div>
-
           <textarea
             ref="textareaRef"
             v-model="message"
             class="input-textarea"
-            :placeholder="activeCategory ? activeCategory.placeholder : 'Assign a task or ask anything'"
+            placeholder="Command Dzeck to analyze a market or asset..."
             rows="1"
             @focus="isFocused = true"
             @blur="isFocused = false"
@@ -47,79 +41,31 @@
             @keydown.enter.exact.prevent="handleSend"
           />
           <div class="input-actions">
-            <button class="attach-btn" title="Attach">
+            <button class="attach-btn" title="Attach context">
               <Plus :size="18" />
             </button>
             <button
               class="send-btn"
               :class="{ active: message.trim().length > 0 }"
               @click="handleSend"
-              title="Send"
+              title="Send Command"
             >
               <ArrowUp :size="16" />
             </button>
           </div>
         </div>
-
-        <!-- Contextual sub-options — shown when a category is selected -->
-        <transition name="slide-down">
-          <div v-if="activeCategory && activeCategory.subOptions" class="sub-panel">
-            <div class="sub-label">{{ activeCategory.subLabel }}</div>
-            <div class="sub-options">
-              <button
-                v-for="opt in activeCategory.subOptions"
-                :key="opt.value"
-                class="sub-option"
-                :class="{ selected: selectedSub === opt.value }"
-                @click="selectSub(opt)"
-              >
-                <component :is="opt.icon" :size="13" />
-                {{ opt.label }}
-              </button>
-            </div>
-
-            <div v-if="activeCategory.ideas" class="explore-section">
-              <div class="sub-label">Explore ideas</div>
-              <div class="ideas">
-                <button
-                  v-for="idea in activeCategory.ideas"
-                  :key="idea"
-                  class="idea-chip"
-                  @click="fillIdea(idea)"
-                >
-                  {{ idea }}
-                  <ArrowUpRight :size="11" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </transition>
       </div>
 
-      <!-- Main suggestion pills -->
-      <div class="suggestions" v-if="!activeCategory">
+      <!-- Suggestion pills -->
+      <div class="suggestions fade-up-4">
         <button
-          v-for="cat in categories"
-          :key="cat.id"
+          v-for="sug in suggestions"
+          :key="sug.id"
           class="suggestion-pill"
-          @click="selectCategory(cat)"
+          @click="selectSuggestion(sug)"
         >
-          <component :is="cat.icon" :size="14" />
-          {{ cat.label }}
-        </button>
-      </div>
-
-      <!-- When category active, show change category pills -->
-      <div class="suggestions" v-else>
-        <button
-          v-for="cat in categories"
-          :key="cat.id"
-          class="suggestion-pill"
-          :class="{ 'pill-active': activeCategory?.id === cat.id }"
-          @click="selectCategory(cat)"
-        >
-          <component :is="cat.icon" :size="14" />
-          {{ cat.label }}
+          <component :is="sug.icon" :size="14" class="pill-icon" />
+          {{ sug.label }}
         </button>
       </div>
     </main>
@@ -128,13 +74,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, markRaw } from 'vue'
+import { ref, nextTick, markRaw, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Bot, Sun, Moon, Plus, ArrowUp, ArrowUpRight, X,
-  Globe, Monitor, Terminal, Palette, MoreHorizontal,
-  Presentation, ShoppingCart, LayoutDashboard, Image,
-  Code2, FileSearch, Database, Smartphone, Cpu
+  Bot, Sun, Moon, Plus, ArrowUp, X,
+  TrendingUp, TrendingDown, BarChart2, Activity, Search, Globe, Clock, Calendar, Zap, Target
 } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
 
@@ -144,135 +88,28 @@ const router = useRouter()
 const message = ref('')
 const isFocused = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const selectedSub = ref<string | null>(null)
+const isLoaded = ref(false)
 
-interface SubOption {
-  label: string
-  value: string
-  icon: any
-  prompt?: string
-}
+onMounted(() => {
+  setTimeout(() => {
+    isLoaded.value = true
+  }, 50)
+})
 
-interface Category {
+interface Suggestion {
   id: string
   label: string
   icon: any
-  placeholder: string
-  subLabel?: string
-  subOptions?: SubOption[]
-  ideas?: string[]
-  defaultPrompt: string
+  prompt: string
 }
 
-const categories: Category[] = [
-  {
-    id: 'slides',
-    label: 'Create slides',
-    icon: markRaw(Presentation),
-    placeholder: 'Describe your presentation topic…',
-    defaultPrompt: 'Create a professional presentation on ',
-    subLabel: 'What type of presentation?',
-    subOptions: [
-      { label: 'Business Pitch', value: 'pitch', icon: markRaw(Presentation), prompt: 'Create a compelling business pitch deck that includes executive summary, problem statement, solution, market opportunity, business model, traction, team, and funding ask.' },
-      { label: 'Tutorial / How-to', value: 'tutorial', icon: markRaw(Code2), prompt: 'Create a clear step-by-step tutorial presentation with introduction, prerequisites, detailed steps with visuals, and a summary slide.' },
-      { label: 'Report / Analysis', value: 'report', icon: markRaw(FileSearch), prompt: 'Create a professional report presentation with executive summary, key findings, data visualizations, insights, and actionable recommendations.' },
-      { label: 'Keynote / Talk', value: 'keynote', icon: markRaw(Cpu), prompt: 'Create an engaging keynote-style presentation with a compelling narrative, strong opening hook, clear story arc, impactful visuals, and memorable closing.' },
-    ],
-    ideas: [
-      'AI industry trends 2025',
-      'Product launch deck',
-      'Quarterly business review',
-    ]
-  },
-  {
-    id: 'website',
-    label: 'Build website',
-    icon: markRaw(Globe),
-    placeholder: 'Describe the website you want to build…',
-    defaultPrompt: 'Build a website for ',
-    subLabel: 'What would you like to build?',
-    subOptions: [
-      { label: 'Landing Page', value: 'landing', icon: markRaw(Globe), prompt: 'Build a modern, conversion-optimized landing page with hero section, features, testimonials, pricing, FAQ, and CTA. Make it visually stunning with smooth animations.' },
-      { label: 'E-commerce', value: 'ecommerce', icon: markRaw(ShoppingCart), prompt: 'Build a full e-commerce website with product catalog, shopping cart, product detail pages, checkout flow, and order confirmation.' },
-      { label: 'Dashboard', value: 'dashboard', icon: markRaw(LayoutDashboard), prompt: 'Build a professional analytics dashboard with charts, KPI cards, data tables, filters, and a clean sidebar navigation.' },
-      { label: 'Portfolio', value: 'portfolio', icon: markRaw(Image), prompt: 'Build a sleek personal portfolio website with about section, projects showcase, skills, work experience timeline, and contact form.' },
-    ],
-    ideas: [
-      'Event registration landing page',
-      'Product launch page',
-      'Build waitlist landing page',
-    ]
-  },
-  {
-    id: 'desktop',
-    label: 'Develop desktop apps',
-    icon: markRaw(Monitor),
-    placeholder: 'Describe the desktop app you want…',
-    defaultPrompt: 'Develop a desktop application that ',
-    subLabel: 'What type of app?',
-    subOptions: [
-      { label: 'Productivity Tool', value: 'productivity', icon: markRaw(Cpu), prompt: 'Develop a productivity desktop application with a clean UI, local data storage, keyboard shortcuts, and system tray support.' },
-      { label: 'Data Tool', value: 'data', icon: markRaw(Database), prompt: 'Develop a data management desktop app that can import/export CSV and Excel files, visualize data with charts, and perform analysis.' },
-      { label: 'Mobile App', value: 'mobile', icon: markRaw(Smartphone), prompt: 'Develop a cross-platform mobile application with intuitive navigation, offline support, push notifications, and a polished UI.' },
-    ],
-    ideas: [
-      'File organizer app',
-      'System monitor dashboard',
-      'Note-taking app with sync',
-    ]
-  },
-  {
-    id: 'design',
-    label: 'Design',
-    icon: markRaw(Palette),
-    placeholder: 'Describe what you want to design…',
-    defaultPrompt: 'Design a ',
-    subLabel: 'What would you like to design?',
-    subOptions: [
-      { label: 'UI / Interface', value: 'ui', icon: markRaw(LayoutDashboard), prompt: 'Design a modern, accessible UI with a clear visual hierarchy, consistent spacing, proper color contrast, and a clean component system.' },
-      { label: 'Logo / Brand', value: 'brand', icon: markRaw(Image), prompt: 'Design a professional brand identity including logo, color palette, typography, and brand guidelines document.' },
-      { label: 'Infographic', value: 'infographic', icon: markRaw(FileSearch), prompt: 'Design a visually compelling infographic that presents data and information in a clear, engaging, and shareable format.' },
-    ],
-    ideas: [
-      'SaaS product UI design',
-      'Mobile app icon set',
-      'Social media kit',
-    ]
-  },
-  {
-    id: 'code',
-    label: 'Run code',
-    icon: markRaw(Terminal),
-    placeholder: 'Describe what you want to build or run…',
-    defaultPrompt: 'Write and execute code that ',
-    subLabel: 'What would you like to do?',
-    subOptions: [
-      { label: 'Data Analysis', value: 'data', icon: markRaw(Database), prompt: 'Write Python code to analyze a dataset: load the data, clean it, compute statistics, generate visualizations, and summarize the key insights.' },
-      { label: 'Web Scraping', value: 'scraping', icon: markRaw(Globe), prompt: 'Write a web scraper that extracts structured data from a website, handles pagination, saves the results to CSV, and includes error handling.' },
-      { label: 'Automation', value: 'automation', icon: markRaw(Cpu), prompt: 'Write an automation script that performs repetitive tasks automatically, includes logging, error recovery, and produces a results report.' },
-      { label: 'API / Backend', value: 'api', icon: markRaw(Code2), prompt: 'Build a REST API with proper endpoints, request validation, error handling, authentication, and clear documentation.' },
-    ],
-    ideas: [
-      'Analyze sales data from CSV',
-      'Scrape and summarize news',
-      'Automate file organization',
-    ]
-  },
-  {
-    id: 'more',
-    label: 'More',
-    icon: markRaw(MoreHorizontal),
-    placeholder: 'Assign a task or ask anything…',
-    defaultPrompt: '',
-    ideas: [
-      'Research a topic in depth',
-      'Summarize a document',
-      'Translate text to another language',
-    ]
-  },
+const suggestions: Suggestion[] = [
+  { id: 'xauusd', label: 'Cari entry XAUUSD sekarang', icon: markRaw(Target), prompt: 'Cari entry XAUUSD sekarang' },
+  { id: 'btc', label: 'Scan momentum BTC', icon: markRaw(Zap), prompt: 'Scan momentum BTC' },
+  { id: 'eurusd', label: 'Analisa EURUSD multi-timeframe', icon: markRaw(BarChart2), prompt: 'Analisa EURUSD multi-timeframe' },
+  { id: 'calendar', label: 'Cek economic calendar', icon: markRaw(Calendar), prompt: 'Cek economic calendar hari ini dan dampaknya' },
+  { id: 'gbpusd', label: 'Posisi terbaik GBPUSD', icon: markRaw(Activity), prompt: 'Posisi terbaik GBPUSD hari ini' },
 ]
-
-const activeCategory = ref<Category | null>(null)
 
 const autoResize = () => {
   const el = textareaRef.value
@@ -281,41 +118,13 @@ const autoResize = () => {
   el.style.height = Math.min(el.scrollHeight, 200) + 'px'
 }
 
-const selectCategory = async (cat: Category) => {
-  activeCategory.value = cat
-  selectedSub.value = null
-  message.value = cat.defaultPrompt
+const selectSuggestion = async (sug: Suggestion) => {
+  message.value = sug.prompt
   await nextTick()
   autoResize()
   textareaRef.value?.focus()
   const end = message.value.length
   textareaRef.value?.setSelectionRange(end, end)
-}
-
-const clearCategory = async () => {
-  activeCategory.value = null
-  selectedSub.value = null
-  message.value = ''
-  await nextTick()
-  autoResize()
-}
-
-const selectSub = async (opt: SubOption) => {
-  selectedSub.value = opt.value
-  if (opt.prompt) {
-    message.value = opt.prompt
-    await nextTick()
-    autoResize()
-    textareaRef.value?.focus()
-  }
-}
-
-const fillIdea = async (idea: string) => {
-  const prefix = activeCategory.value?.defaultPrompt ?? ''
-  message.value = prefix ? `${prefix}${idea.toLowerCase()}` : idea
-  await nextTick()
-  autoResize()
-  textareaRef.value?.focus()
 }
 
 const PENDING_KEY = 'dzeck_pending_prompt'
@@ -334,7 +143,21 @@ const handleSend = () => {
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
 }
+
+/* Animations */
+.fade-up-1, .fade-up-2, .fade-up-3, .fade-up-4 {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.is-loaded .fade-up-1 { opacity: 1; transform: translateY(0); transition-delay: 0.1s; }
+.is-loaded .fade-up-2 { opacity: 1; transform: translateY(0); transition-delay: 0.2s; }
+.is-loaded .fade-up-3 { opacity: 1; transform: translateY(0); transition-delay: 0.3s; }
+.is-loaded .fade-up-4 { opacity: 1; transform: translateY(0); transition-delay: 0.4s; }
 
 /* ── Navbar ── */
 .nav {
@@ -342,12 +165,13 @@ const handleSend = () => {
   top: 0;
   z-index: 50;
   background: var(--background-gray-main);
+  border-bottom: 1px solid var(--border-light);
 }
 .nav-inner {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 56px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -355,40 +179,48 @@ const handleSend = () => {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   text-decoration: none;
   color: var(--text-primary);
+  transition: opacity 0.2s;
+}
+.nav-logo:hover {
+  opacity: 0.8;
 }
 .nav-logo-text {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
+  text-transform: uppercase;
 }
-.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-right { display: flex; align-items: center; gap: 12px; }
 
 .icon-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 8px;
-  border: none; background: transparent;
+  width: 32px; height: 32px; border-radius: 6px;
+  border: 1px solid transparent; background: transparent;
   color: var(--text-secondary); cursor: pointer;
+  transition: all 0.2s;
 }
-.icon-btn:hover { background: var(--fill-tsp-white-main); }
+.icon-btn:hover { background: var(--fill-tsp-white-main); border-color: var(--border-main); color: var(--text-primary); }
 
 .btn-primary {
-  padding: 7px 16px; border-radius: 8px;
-  background: var(--Button-primary-black); color: var(--text-onblack);
-  font-size: 14px; font-weight: 500;
-  text-decoration: none; border: none; cursor: pointer;
+  padding: 8px 18px; border-radius: 6px;
+  background: var(--text-primary); color: var(--background-gray-main);
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  text-decoration: none; border: 1px solid var(--text-primary); cursor: pointer;
+  transition: all 0.2s;
 }
-.btn-primary:hover { opacity: 0.85; }
+.btn-primary:hover { background: transparent; color: var(--text-primary); }
 
 .btn-secondary {
-  padding: 7px 16px; border-radius: 8px; background: transparent;
-  color: var(--text-primary); font-size: 14px; font-weight: 500;
+  padding: 8px 18px; border-radius: 6px; background: transparent;
+  color: var(--text-secondary); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   text-decoration: none; border: 1px solid var(--border-btn-main); cursor: pointer;
+  transition: all 0.2s;
 }
-.btn-secondary:hover { background: var(--fill-tsp-white-main); }
+.btn-secondary:hover { color: var(--text-primary); border-color: var(--text-primary); background: var(--fill-tsp-white-main); }
 
 /* ── Main ── */
 .main {
@@ -397,199 +229,117 @@ const handleSend = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px 100px;
+  padding: 60px 20px 120px;
+  position: relative;
+}
+
+.hero-section {
+  text-align: center;
+  margin-bottom: 40px;
+  max-width: 700px;
 }
 
 .headline {
-  font-size: clamp(26px, 4vw, 38px);
-  font-weight: 400;
-  letter-spacing: -0.025em;
-  font-family: ui-serif, Georgia, 'Times New Roman', serif;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
   color: var(--text-primary);
-  margin: 0 0 28px;
-  text-align: center;
-  line-height: 1.2;
+  margin: 0 0 16px;
+  line-height: 1.1;
+}
+
+.sub-headline {
+  font-size: clamp(15px, 2vw, 18px);
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 auto;
+  max-width: 560px;
 }
 
 /* ── Input wrap + box ── */
 .input-wrap {
   width: 100%;
-  max-width: 680px;
-  margin-bottom: 16px;
+  max-width: 720px;
+  margin-bottom: 24px;
 }
 
 .input-box {
   background: var(--background-card);
   border: 1px solid var(--border-dark);
-  border-radius: 16px;
-  padding: 14px 14px 11px 18px;
+  border-radius: 12px;
+  padding: 16px 16px 12px 20px;
   cursor: text;
-  box-shadow: 0 1px 4px var(--shadow-XS);
-  transition: box-shadow 0.18s, border-color 0.18s;
+  box-shadow: 0 4px 20px var(--shadow-XS);
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
-.input-box:hover { border-color: var(--border-input-active); box-shadow: 0 2px 12px var(--shadow-S); }
-.input-box.focused { border-color: var(--border-input-active); box-shadow: 0 0 0 3px var(--fill-blue), 0 2px 12px var(--shadow-S); }
-
-/* ── Category tag ── */
-.category-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px 3px 7px;
-  border-radius: 99px;
-  background: var(--fill-blue);
-  border: 1px solid var(--border-input-active);
-  color: var(--text-brand);
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-.tag-remove {
-  display: flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 99px;
-  border: none; background: transparent;
-  color: var(--text-brand); cursor: pointer; padding: 0;
-  opacity: 0.7;
-}
-.tag-remove:hover { opacity: 1; background: var(--Button-secondary-brand); }
+.input-box:hover { border-color: var(--text-tertiary); }
+.input-box.focused { border-color: var(--text-primary); box-shadow: 0 4px 24px var(--shadow-S); }
 
 .input-textarea {
   width: 100%;
   min-height: 24px;
-  max-height: 200px;
+  max-height: 240px;
   background: transparent;
   border: none; outline: none; resize: none;
-  font-size: 15px; line-height: 1.6;
+  font-size: 16px; line-height: 1.5;
   color: var(--text-primary); font-family: inherit;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   overflow-y: auto;
 }
-.input-textarea::placeholder { color: var(--text-disable); }
+.input-textarea::placeholder { color: var(--text-disable); font-weight: 400; }
 
 .input-actions {
   display: flex; align-items: center; justify-content: space-between;
 }
 .attach-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: 6px;
   border: 1px solid var(--border-btn-main);
   background: transparent; color: var(--text-secondary); cursor: pointer;
+  transition: all 0.2s;
 }
-.attach-btn:hover { background: var(--fill-tsp-white-main); }
+.attach-btn:hover { background: var(--fill-tsp-white-main); color: var(--text-primary); border-color: var(--text-tertiary); }
 
 .send-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px;
-  border: none; background: var(--Button-primary-black);
-  color: var(--text-onblack); cursor: pointer; opacity: 0.3;
-  transition: opacity 0.15s;
+  width: 32px; height: 32px; border-radius: 6px;
+  border: 1px solid transparent; background: var(--background-gray-main);
+  color: var(--text-disable); cursor: pointer;
+  transition: all 0.2s;
 }
-.send-btn.active { opacity: 1; }
-.send-btn.active:hover { opacity: 0.85; }
-
-/* ── Sub panel ── */
-.sub-panel {
-  border: 1px solid var(--border-main);
-  border-top: none;
-  border-radius: 0 0 14px 14px;
-  padding: 14px 16px 16px;
-  background: var(--background-card);
-  box-shadow: 0 4px 12px var(--shadow-XS);
-  margin-top: -2px;
-}
-.sub-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 10px;
-}
-.sub-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 16px;
-}
-.sub-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-btn-main);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 450;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-.sub-option:hover {
-  background: var(--fill-tsp-white-main);
-  color: var(--text-primary);
-}
-.sub-option.selected {
-  background: var(--fill-blue);
-  border-color: var(--border-input-active);
-  color: var(--text-brand);
-}
-
-.explore-section { margin-top: 4px; }
-.ideas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.idea-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 11px;
-  border-radius: 99px;
-  border: 1px solid var(--border-main);
-  background: var(--background-gray-main);
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-}
-.idea-chip:hover { background: var(--fill-tsp-white-main); color: var(--text-primary); }
+.send-btn.active { background: var(--text-primary); color: var(--background-gray-main); border-color: var(--text-primary); }
+.send-btn.active:hover { opacity: 0.9; transform: translateY(-1px); }
 
 /* ── Suggestion pills ── */
 .suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
-  max-width: 680px;
+  max-width: 760px;
 }
 .suggestion-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 99px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 6px;
   border: 1px solid var(--border-btn-main);
   background: var(--background-card);
   color: var(--text-secondary);
-  font-size: 13px; font-weight: 450; cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: all 0.2s;
 }
-.suggestion-pill:hover { background: var(--fill-tsp-white-main); color: var(--text-primary); }
-.suggestion-pill.pill-active {
-  background: var(--fill-blue);
-  border-color: var(--border-input-active);
-  color: var(--text-brand);
+.pill-icon {
+  color: var(--text-tertiary);
+  transition: color 0.2s;
 }
-
-/* ── Transition ── */
-.slide-down-enter-active { transition: all 0.18s ease; }
-.slide-down-leave-active { transition: all 0.14s ease; }
-.slide-down-enter-from { opacity: 0; transform: translateY(-6px); }
-.slide-down-leave-to { opacity: 0; transform: translateY(-4px); }
+.suggestion-pill:hover { background: var(--background-gray-main); color: var(--text-primary); border-color: var(--text-tertiary); }
+.suggestion-pill:hover .pill-icon { color: var(--text-primary); }
 
 /* ── Responsive ── */
-@media (max-width: 480px) {
-  .headline { font-size: 22px; }
+@media (max-width: 600px) {
+  .headline { font-size: 28px; }
   .nav-right .btn-secondary { display: none; }
   .main { padding: 40px 16px 80px; }
+  .suggestion-pill { font-size: 12px; padding: 7px 12px; }
 }
 </style>
