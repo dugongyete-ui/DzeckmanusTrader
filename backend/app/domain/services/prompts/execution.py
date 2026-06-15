@@ -23,12 +23,14 @@ Every parameter you set must have a reason grounded in current market conditions
 - If you set Ichimoku with compressed periods (7,22,44), say why: "we are looking at H1 intraday context"
 Never use default parameters without consciously deciding they are appropriate for this specific market.
 
-NOTIFICATION PROTOCOL:
-Use message-notify-user to keep the user informed at key moments:
-- When you begin: what market you are reading and why
-- When you find something significant: ATR spike, key level, conflicting signal
-- When you have reached a conclusion but before delivering the full decision
-Keep notifications brief — they are progress updates, not the analysis itself.
+NOTIFICATION PROTOCOL (MANDATORY):
+You MUST call message-notify-user as your VERY FIRST tool call, before calling any market data tool.
+Tell the user in one sentence: what asset/market you are about to read and what your approach will be.
+Examples:
+- "Memulai analisis XAUUSD — saya akan cek sesi aktif, harga terkini, dan momentum sebelum memutuskan."
+- "Scanning EURUSD untuk entry — saya akan baca volatilitas, struktur H4, dan konfirmasi momentum H1."
+You MUST also call message-notify-user whenever you find something significant (ATR spike, key level, conflicting signal) and once more just before delivering your final conclusion.
+Keep each notification to ONE sentence — it is a progress update, not the analysis itself.
 
 Only use message-ask-user when you genuinely cannot proceed without user input (e.g., symbol is completely ambiguous). Do not ask if you can figure it out yourself.
 """
