@@ -29,23 +29,58 @@ From scan data, classify the regime and pick tools accordingly:
 
 REGIME A (ADX > 25, clear trend):
   Notify: "Regime A — Trend kuat terdeteksi. Menjalankan analisis trend-following..."
-  Deriv → deriv_smart_analysis (full multi-TF), deriv_macd, deriv_ema (50), deriv_ema (200)
+  Deriv MUST → deriv_smart_analysis (full multi-TF base)
+             → deriv_ichimoku (cloud position + TK cross)
+             → deriv_supertrend (dynamic trend direction + SL level)
+             → deriv_macd (momentum confirmation; adapt fast/slow to timeframe)
+             → deriv_ema with periods=[21,50,200] (structure confirmation)
+             → deriv_fibonacci (key pullback entry zones; use H4 granularity)
+             → deriv_pivot_points period="daily" (institutional reference levels)
+             → deriv_heikin_ashi (noise filter — confirm entry candle quality)
+  Deriv OPTIONAL (if breakout suspected):
+             → deriv_donchian (N-period high/low breakout confirmation)
+             → deriv_parabolic_sar (trailing stop sizing)
   TV    → multi_timeframe_analysis + volume_confirmation_analysis
 
 REGIME B (ADX 20-25, transitioning):
   Notify: "Regime B — Pasar dalam transisi. Menjalankan analisis konfirmasi..."
-  Deriv → deriv_smart_analysis + deriv_rsi + deriv_bbands
+  Deriv MUST → deriv_smart_analysis (treat confluence < 68% as TUNGGU)
+             → deriv_rsi (period=14 standard; use 21 if ATR is elevated)
+             → deriv_bbands (price near band extremes?)
+             → deriv_williams_r (fast overbought/oversold confirmation)
+             → deriv_pivot_points period="daily" (price vs PP for directional bias)
+  Deriv OPTIONAL:
+             → deriv_heikin_ashi (check for indecision doji candles)
+             → deriv_parabolic_sar (detect recent SAR flip = early trend signal)
   TV    → advanced_candle_pattern + volume_confirmation_analysis
 
 REGIME C (ADX < 20, ranging):
   Notify: "Regime C — Pasar sideways. Menjalankan analisis mean-reversion..."
-  Deriv → deriv_stoch + deriv_rsi + deriv_bbands + deriv_technical_analysis (for S/R levels)
+  Deriv MUST → deriv_stoch (use k_period=5 for faster signals in tight range)
+             → deriv_rsi (period=9 or 14)
+             → deriv_cci (CCI < -100 buy zone; CCI > +100 sell zone — great for Gold)
+             → deriv_williams_r (fast reversal signals at extremes)
+             → deriv_bbands (entry ONLY at band extremes with RSI extreme)
+             → deriv_technical_analysis (S/R levels for range boundaries)
+             → deriv_pivot_points period="daily" (PP/S1/R1 as range anchors)
+             → deriv_heikin_ashi (confirm reversal candles at range extremes)
+  Deriv OPTIONAL:
+             → deriv_keltner (squeeze detection — BB inside KC = breakout incoming)
+             → deriv_fibonacci (50% fib often acts as range midpoint)
   TV    → coin_analysis + bollinger_scan
 
 REGIME D (ATR spike > 150% of average OR extreme volatility):
   Notify: "Regime D — Volatilitas ekstrem terdeteksi. Tidak ada entry yang aman saat ini."
   → Stop all analysis. Call message_notify_user to inform user. Do NOT run entry analysis.
   → Step result: success=true, explain the volatility spike and when to re-check
+
+PARAMETER ADAPTATION RULES (apply in all regimes):
+  → High ATR (> 0.6% of price): use RSI(21), Supertrend multiplier=4.0, SAR af_max=0.10
+  → Normal ATR: use defaults — RSI(14), Supertrend(10, 3.0), SAR defaults
+  → Scalp/intraday (H1 or M15): use RSI(9), Stoch(5,3), Williams%R(9), Ichimoku(7,22,44)
+  → Swing (H4/D1): use RSI(14-21), Stoch(14,3), Ichimoku(9,26,52) standard
+  → Strong trend (ADX > 30): use Fibonacci lookback=50-100 on H4 for deep levels
+  → Tight range: use Donchian(10-20) to catch small breakouts faster
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2 — DECISION EXECUTION RULES

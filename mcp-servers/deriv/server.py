@@ -6,6 +6,9 @@ technical indicators:
 RSI, MACD, Bollinger Bands, EMA/SMA, ATR, Stochastic, ADX,
 Market Structure (HH/HL/LH/LL), Support/Resistance, Divergence detection,
 Smart SL snap to swing, multi-timeframe confluence analysis.
+Fibonacci Retracement/Extension, Pivot Points (Daily/Weekly),
+Ichimoku Cloud, Parabolic SAR, Supertrend, Keltner Channel,
+Donchian Channel, CCI, Williams %R, Heikin Ashi.
 """
 
 import asyncio
@@ -821,6 +824,221 @@ def grade_setup_quality(regime: str, confluence_pct: float, has_pattern: bool,
     return {"grade": grade, "label": label, "score": score, "size_note": size_note}
 
 
+# ── New Indicator Math ────────────────────────────────────────────────────────
+
+def calc_fibonacci(swing_high: float, swing_low: float, trend: str = "up") -> dict:
+    """Fibonacci retracement and extension levels from swing high/low."""
+    diff = swing_high - swing_low
+    retrace_pcts = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+    ext_pcts      = [1.272, 1.618, 2.0, 2.618]
+    if trend == "up":
+        retracements = {f"{r*100:.1f}%": round(swing_high - diff * r, 5) for r in retrace_pcts}
+        extensions   = {f"{e*100:.1f}%": round(swing_high + diff * (e - 1.0), 5) for e in ext_pcts}
+    else:
+        retracements = {f"{r*100:.1f}%": round(swing_low + diff * r, 5) for r in retrace_pcts}
+        extensions   = {f"{e*100:.1f}%": round(swing_low - diff * (e - 1.0), 5) for e in ext_pcts}
+    return {"retracements": retracements, "extensions": extensions}
+
+
+def calc_pivot_points(high: float, low: float, close: float) -> dict:
+    """Classic pivot points (daily or weekly) from previous period H/L/C."""
+    pp = (high + low + close) / 3.0
+    r1 = 2 * pp - low;  s1 = 2 * pp - high
+    r2 = pp + (high - low); s2 = pp - (high - low)
+    r3 = high + 2 * (pp - low); s3 = low - 2 * (high - pp)
+    return {
+        "pp": round(pp, 5),
+        "r1": round(r1, 5), "r2": round(r2, 5), "r3": round(r3, 5),
+        "s1": round(s1, 5), "s2": round(s2, 5), "s3": round(s3, 5),
+    }
+
+
+def calc_ichimoku(highs: list[float], lows: list[float], closes: list[float],
+                  tenkan: int = 9, kijun: int = 26, senkou_b_period: int = 52) -> dict | None:
+    """Ichimoku Kinko Hyo: Tenkan, Kijun, Senkou A/B, Chikou."""
+    if len(closes) < senkou_b_period:
+        return None
+    def mid(h, l): return (max(h) + min(l)) / 2.0
+    tenkan_val   = mid(highs[-tenkan:], lows[-tenkan:])
+    kijun_val    = mid(highs[-kijun:], lows[-kijun:])
+    senkou_a     = (tenkan_val + kijun_val) / 2.0
+    senkou_b_val = mid(highs[-senkou_b_period:], lows[-senkou_b_period:])
+    chikou       = closes[-1]
+    price        = closes[-1]
+    cloud_top    = max(senkou_a, senkou_b_val)
+    cloud_bot    = min(senkou_a, senkou_b_val)
+    if price > cloud_top:
+        cloud_signal = "bullish"; cloud_desc = "Price ABOVE cloud — bullish ✅"
+    elif price < cloud_bot:
+        cloud_signal = "bearish"; cloud_desc = "Price BELOW cloud — bearish ⚠️"
+    else:
+        cloud_signal = "neutral"; cloud_desc = "Price INSIDE cloud — indecision ⚖️"
+    tk_cross = "bullish" if tenkan_val > kijun_val else "bearish"
+    return {
+        "tenkan": round(tenkan_val, 5), "kijun": round(kijun_val, 5),
+        "senkou_a": round(senkou_a, 5), "senkou_b": round(senkou_b_val, 5),
+        "chikou": round(chikou, 5), "cloud_top": round(cloud_top, 5),
+        "cloud_bot": round(cloud_bot, 5), "cloud_signal": cloud_signal,
+        "cloud_desc": cloud_desc, "tk_cross": tk_cross,
+    }
+
+
+def calc_parabolic_sar(highs: list[float], lows: list[float],
+                       af_start: float = 0.02, af_step: float = 0.02,
+                       af_max: float = 0.2) -> tuple[float, str] | None:
+    """Parabolic SAR. Returns (sar_value, trend: 'up'|'down')."""
+    if len(highs) < 10:
+        return None
+    is_up = highs[1] > highs[0]
+    af = af_start
+    ep = highs[0] if is_up else lows[0]
+    sar = lows[0] if is_up else highs[0]
+    for i in range(2, len(highs)):
+        sar = sar + af * (ep - sar)
+        if is_up:
+            sar = min(sar, lows[i-1], lows[i-2])
+            if lows[i] < sar:
+                is_up = False; sar = ep; ep = lows[i]; af = af_start
+            else:
+                if highs[i] > ep:
+                    ep = highs[i]; af = min(af + af_step, af_max)
+        else:
+            sar = max(sar, highs[i-1], highs[i-2])
+            if highs[i] > sar:
+                is_up = True; sar = ep; ep = highs[i]; af = af_start
+            else:
+                if lows[i] < ep:
+                    ep = lows[i]; af = min(af + af_step, af_max)
+    return (round(sar, 5), "up" if is_up else "down")
+
+
+def calc_supertrend(highs: list[float], lows: list[float], closes: list[float],
+                    period: int = 10, multiplier: float = 3.0) -> tuple[float, str] | None:
+    """Supertrend. Returns (value, direction: 'up'|'down')."""
+    if len(closes) < period + 2:
+        return None
+    trs = [max(highs[i]-lows[i], abs(highs[i]-closes[i-1]), abs(lows[i]-closes[i-1]))
+           for i in range(1, len(closes))]
+    if len(trs) < period:
+        return None
+    atr_v = sum(trs[:period]) / period
+    for tr in trs[period:]:
+        atr_v = (atr_v * (period - 1) + tr) / period
+
+    n = min(len(closes), period * 8)
+    h, l, c = highs[-n:], lows[-n:], closes[-n:]
+    trs2 = [max(h[i]-l[i], abs(h[i]-c[i-1]), abs(l[i]-c[i-1])) for i in range(1, len(c))]
+    atr2 = sum(trs2[:period]) / period
+    for tr in trs2[period:]:
+        atr2 = (atr2 * (period-1) + tr) / period
+
+    bu = [(h[i]+l[i])/2 + multiplier*atr2 for i in range(len(c))]
+    bl = [(h[i]+l[i])/2 - multiplier*atr2 for i in range(len(c))]
+    fu = list(bu); fl = list(bl)
+    for i in range(1, len(c)):
+        fu[i] = bu[i] if (bu[i] < fu[i-1] or c[i-1] > fu[i-1]) else fu[i-1]
+        fl[i] = bl[i] if (bl[i] > fl[i-1] or c[i-1] < fl[i-1]) else fl[i-1]
+
+    st = [0.0] * len(c); dirs = ["up"] * len(c)
+    for i in range(1, len(c)):
+        if st[i-1] == fu[i-1]:
+            st[i]   = fl[i] if c[i] > fu[i] else fu[i]
+            dirs[i] = "up"  if c[i] > fu[i] else "down"
+        else:
+            st[i]   = fu[i] if c[i] < fl[i] else fl[i]
+            dirs[i] = "down" if c[i] < fl[i] else "up"
+    return (round(st[-1], 5), dirs[-1])
+
+
+def calc_keltner(highs: list[float], lows: list[float], closes: list[float],
+                 ema_period: int = 20, atr_period: int = 10,
+                 multiplier: float = 2.0) -> dict | None:
+    """Keltner Channel: EMA ± multiplier × ATR."""
+    if len(closes) < max(ema_period, atr_period) + 2:
+        return None
+    k = 2.0 / (ema_period + 1)
+    ema = sum(closes[:ema_period]) / ema_period
+    for cv in closes[ema_period:]:
+        ema = cv * k + ema * (1 - k)
+    trs = [max(highs[i]-lows[i], abs(highs[i]-closes[i-1]), abs(lows[i]-closes[i-1]))
+           for i in range(1, len(closes))]
+    atr_v = sum(trs[:atr_period]) / atr_period
+    for tr in trs[atr_period:]:
+        atr_v = (atr_v * (atr_period-1) + tr) / atr_period
+    return {
+        "middle": round(ema, 5),
+        "upper":  round(ema + multiplier * atr_v, 5),
+        "lower":  round(ema - multiplier * atr_v, 5),
+        "atr":    round(atr_v, 5),
+    }
+
+
+def calc_donchian(highs: list[float], lows: list[float], period: int = 20) -> dict | None:
+    """Donchian Channel: highest high / lowest low over N periods."""
+    if len(highs) < period:
+        return None
+    upper  = max(highs[-period:])
+    lower  = min(lows[-period:])
+    return {"upper": round(upper, 5), "middle": round((upper+lower)/2, 5), "lower": round(lower, 5)}
+
+
+def calc_cci(highs: list[float], lows: list[float], closes: list[float],
+             period: int = 20) -> float | None:
+    """CCI = (TP - SMA_TP) / (0.015 × Mean Absolute Deviation)."""
+    if len(closes) < period:
+        return None
+    tp = [(highs[i]+lows[i]+closes[i])/3.0 for i in range(len(closes))]
+    tp_w = tp[-period:]
+    sma_tp = sum(tp_w) / period
+    mad = sum(abs(x - sma_tp) for x in tp_w) / period
+    if mad == 0:
+        return 0.0
+    return round((tp[-1] - sma_tp) / (0.015 * mad), 2)
+
+
+def calc_williams_r(highs: list[float], lows: list[float], closes: list[float],
+                    period: int = 14) -> float | None:
+    """Williams %R = (HH - Close) / (HH - LL) × -100."""
+    if len(closes) < period:
+        return None
+    hh = max(highs[-period:]); ll = min(lows[-period:])
+    if hh == ll:
+        return -50.0
+    return round((hh - closes[-1]) / (hh - ll) * -100, 2)
+
+
+def calc_heikin_ashi(opens: list[float], highs: list[float], lows: list[float],
+                     closes: list[float], analyze_last: int = 10) -> dict | None:
+    """Convert OHLC to Heikin Ashi and analyze trend."""
+    if len(closes) < 2:
+        return None
+    ha = []
+    for i in range(len(closes)):
+        ha_c = (opens[i]+highs[i]+lows[i]+closes[i]) / 4.0
+        ha_o = (opens[0]+closes[0])/2.0 if i == 0 else (ha[i-1]["open"]+ha[i-1]["close"])/2.0
+        ha_h = max(highs[i], ha_o, ha_c)
+        ha_l = min(lows[i],  ha_o, ha_c)
+        ha.append({"open": round(ha_o,5), "high": round(ha_h,5),
+                   "low":  round(ha_l,5), "close": round(ha_c,5)})
+    recent = ha[-analyze_last:]
+    bull_n = sum(1 for c in recent if c["close"] > c["open"])
+    bear_n = sum(1 for c in recent if c["close"] < c["open"])
+    last5  = ha[-5:]
+    # Strong bull: bullish HA candles with no lower shadow
+    strong_bull = sum(1 for c in last5
+                      if c["close"] > c["open"]
+                      and abs(c["low"] - min(c["open"], c["close"])) < 0.001 * c["close"])
+    strong_bear = sum(1 for c in last5
+                      if c["close"] < c["open"]
+                      and abs(c["high"] - max(c["open"], c["close"])) < 0.001 * c["close"])
+    trend = "BULLISH" if bull_n > bear_n else ("BEARISH" if bear_n > bull_n else "NEUTRAL")
+    return {
+        "last_candle": ha[-1], "recent_5": last5, "trend": trend,
+        "bullish_candles": bull_n, "bearish_candles": bear_n,
+        "strong_bull": strong_bull >= 3, "strong_bear": strong_bear >= 3,
+    }
+
+
 # ── Tool Definitions ──────────────────────────────────────────────────────────
 
 @app.list_tools()
@@ -1118,6 +1336,260 @@ async def list_tools() -> list[Tool]:
                         "description": "Deriv symbol e.g. frxXAUUSD (Gold), frxEURUSD, frxGBPUSD, frxXAGUSD",
                         "default": "frxXAUUSD"
                     }
+                },
+                "required": ["symbol"]
+            }
+        ),
+
+        # ── Advanced Indicators ───────────────────────────────────────────────
+        Tool(
+            name="deriv_fibonacci",
+            description=(
+                "Calculate Fibonacci retracement and extension levels from recent swing high/low on Deriv data. "
+                "Retracement levels: 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%. "
+                "Extension levels: 127.2%, 161.8%, 200%, 261.8%. "
+                "Use after identifying a significant price move to find pullback support (uptrend) "
+                "or bounce resistance (downtrend). Agent should choose period based on regime."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds: 3600=1h, 14400=4h, 86400=1D",
+                        "default": 14400,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "swing_lookback": {"type": "integer", "description": "Candles to look back for swing high/low (default 50)", "default": 50},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_pivot_points",
+            description=(
+                "Calculate classic Pivot Points (PP, R1/R2/R3, S1/S2/S3) from Deriv data. "
+                "Pivot points are used by institutions and market makers as key reference levels. "
+                "Daily pivots = previous day's H/L/C. Weekly pivots = previous week's H/L/C. "
+                "Price above PP = bullish bias. Price below PP = bearish bias."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "period": {
+                        "type": "string",
+                        "description": "Pivot period: 'daily' (uses previous day H/L/C) or 'weekly' (uses previous week H/L/C)",
+                        "default": "daily",
+                        "enum": ["daily", "weekly"]
+                    }
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_ichimoku",
+            description=(
+                "Calculate Ichimoku Cloud (Kinko Hyo) for a Deriv instrument. "
+                "Returns Tenkan-sen (9), Kijun-sen (26), Senkou Span A/B, Chikou Span. "
+                "Price above cloud = bullish. Price below cloud = bearish. Price inside cloud = indecision. "
+                "Tenkan > Kijun = bullish cross. "
+                "Excellent for XAUUSD and JPY pairs — agent can adjust periods autonomously."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 14400,
+                        "enum": [900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "tenkan": {"type": "integer", "description": "Tenkan-sen period (default 9, use 7 for faster markets)", "default": 9},
+                    "kijun": {"type": "integer", "description": "Kijun-sen period (default 26, use 22 for faster markets)", "default": 26},
+                    "senkou_b": {"type": "integer", "description": "Senkou Span B period (default 52)", "default": 52},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 300)", "default": 300}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_parabolic_sar",
+            description=(
+                "Calculate Parabolic SAR (Stop and Reverse) for a Deriv instrument. "
+                "SAR below price = uptrend (hold long / buy). SAR above price = downtrend (hold short / sell). "
+                "When SAR flips, it signals a trend reversal. "
+                "Excellent trailing stop tool — agent can adjust acceleration factor for volatility."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "af_start": {"type": "number", "description": "Initial acceleration factor (default 0.02, higher = more sensitive)", "default": 0.02},
+                    "af_step": {"type": "number", "description": "AF increment step (default 0.02)", "default": 0.02},
+                    "af_max": {"type": "number", "description": "Maximum AF cap (default 0.20)", "default": 0.2},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_supertrend",
+            description=(
+                "Calculate Supertrend indicator for a Deriv instrument. "
+                "ATR-based dynamic support/resistance that flips direction with trend. "
+                "Direction 'up' = bullish (price above supertrend line). "
+                "Direction 'down' = bearish (price below supertrend line). "
+                "Agent can tune period and multiplier: higher multiplier = less noise, fewer signals."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "ATR period (default 10; use 7 for scalping, 14 for swing)", "default": 10},
+                    "multiplier": {"type": "number", "description": "ATR multiplier (default 3.0; use 2.0 for tight, 4.0 for wide)", "default": 3.0},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_keltner",
+            description=(
+                "Calculate Keltner Channel for a Deriv instrument. "
+                "EMA ± (multiplier × ATR). More stable than Bollinger Bands in volatile markets. "
+                "Price above upper band = strong bullish momentum. Below lower band = strong bearish. "
+                "Combined with Bollinger Bands: if BB is inside Keltner = squeeze (breakout incoming). "
+                "Agent can adjust EMA period, ATR period, and multiplier."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "ema_period": {"type": "integer", "description": "EMA period (default 20)", "default": 20},
+                    "atr_period": {"type": "integer", "description": "ATR period (default 10)", "default": 10},
+                    "multiplier": {"type": "number", "description": "ATR multiplier (default 2.0)", "default": 2.0},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_donchian",
+            description=(
+                "Calculate Donchian Channel (highest high / lowest low over N periods) for a Deriv instrument. "
+                "Breakout above upper band = strong bullish signal. Below lower = strong bearish. "
+                "Basis of the classic Turtle Trading System. "
+                "Agent can tune period: 20 for medium-term, 55 for long-term breakouts."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "Lookback period (default 20; use 55 for long-term breakouts)", "default": 20},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_cci",
+            description=(
+                "Calculate CCI (Commodity Channel Index) for a Deriv instrument. "
+                "Originally designed for commodities — excellent for XAUUSD and Silver. "
+                "CCI > +100 = overbought / strong bullish momentum. "
+                "CCI < -100 = oversold / strong bearish momentum. "
+                "Zero-line cross = trend change signal. "
+                "Agent can adjust period: 14 for short-term, 20 for medium-term."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "CCI period (default 20; use 14 for faster signals)", "default": 20},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_williams_r",
+            description=(
+                "Calculate Williams %R for a Deriv instrument. "
+                "%R near 0 = overbought (potential sell). %R near -100 = oversold (potential buy). "
+                "Faster and more sensitive than Stochastic — preferred for scalping and intraday. "
+                "Agent can tune period: 14 for standard, 5-9 for faster response."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "Williams %R period (default 14; use 7-9 for scalping)", "default": 14},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv_heikin_ashi",
+            description=(
+                "Calculate Heikin Ashi candles for a Deriv instrument and analyze trend. "
+                "Heikin Ashi smooths out noise — consecutive bullish HA candles with no lower shadow = strong uptrend. "
+                "Consecutive bearish HA candles with no upper shadow = strong downtrend. "
+                "Doji-like HA candle = trend exhaustion / potential reversal. "
+                "Use to filter false signals from other indicators."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size in seconds",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "analyze_last": {"type": "integer", "description": "Number of recent HA candles to analyze for trend (default 10)", "default": 10},
+                    "count": {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
                 },
                 "required": ["symbol"]
             }
@@ -2060,6 +2532,575 @@ async def _dispatch(name: str, args: dict) -> str:
         ]
 
         return "\n".join(str(r) for r in result)
+
+    # ── deriv_fibonacci ───────────────────────────────────────────────────────
+    elif name == "deriv_fibonacci":
+        symbol       = args.get("symbol", "frxXAUUSD")
+        granularity  = args.get("granularity", 14400)
+        swing_lb     = args.get("swing_lookback", 50)
+        count        = max(args.get("count", 200), swing_lb + 10)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        opens, highs, lows, closes = candles_to_ohlcv(candles)
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        # Find swing high/low over lookback window
+        window_h = highs[-swing_lb:]
+        window_l = lows[-swing_lb:]
+        swing_high = max(window_h)
+        swing_low  = min(window_l)
+        # Determine trend: is the most recent close closer to swing_high (up) or swing_low (down)?
+        trend = "up" if (price - swing_low) >= (swing_high - price) else "down"
+
+        fib = calc_fibonacci(swing_high, swing_low, trend)
+        r   = fib["retracements"]
+        e   = fib["extensions"]
+
+        lines = [
+            f"📐 Fibonacci — {symbol} {gran}",
+            f"{'═'*54}",
+            f"Current Price : {price}",
+            f"Swing High    : {swing_high}",
+            f"Swing Low     : {swing_low}",
+            f"Trend Detected: {'↑ Uptrend (retracements = support)' if trend == 'up' else '↓ Downtrend (retracements = resistance)'}",
+            f"",
+            f"── Retracement Levels ({'support zones ↑' if trend == 'up' else 'resistance zones ↓'}) ──",
+        ]
+        for label, level in r.items():
+            marker = " ◀ PRICE" if abs(level - price) / price < 0.002 else ""
+            near_note = " (near)" if abs(level - price) / (swing_high - swing_low) < 0.05 else ""
+            lines.append(f"  Fib {label:<8}: {level}{marker}{near_note}")
+
+        lines += [f"", f"── Extension Levels (profit targets) ──"]
+        for label, level in e.items():
+            lines.append(f"  Ext {label:<8}: {level}")
+
+        lines += [
+            f"",
+            f"⚡ Key levels: 38.2% and 61.8% are highest-probability reversal zones.",
+            f"   61.8% = 'Golden Ratio' — strongest confluence with other indicators.",
+            f"Candles : {len(candles)} ({gran}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_pivot_points ────────────────────────────────────────────────────
+    elif name == "deriv_pivot_points":
+        symbol = args.get("symbol", "frxXAUUSD")
+        period = args.get("period", "daily")
+
+        # Fetch enough candles to get the previous period
+        gran_map = {"daily": 86400, "weekly": 604800}
+        gran_sec = gran_map.get(period, 86400)
+        # Fallback: weekly isn't directly supported by Deriv so use 5 daily candles
+        if period == "weekly":
+            candles = await fetch_candles(symbol, 86400, 10)
+            # Aggregate last week's candles (5 trading days) = candles[-6:-1]
+            prev = candles[-6:-1] if len(candles) >= 6 else candles[:-1]
+            _, h_list, l_list, c_list = candles_to_ohlcv(prev)
+            ph = max(h_list); pl = min(l_list); pc = c_list[-1]
+            label = "Weekly"
+            gran_label = "D1 (weekly aggregate)"
+        else:
+            candles = await fetch_candles(symbol, 86400, 5)
+            if len(candles) < 2:
+                return "Not enough daily candles for pivot points."
+            prev = candles[-2]  # previous day
+            ph = float(prev["high"]); pl = float(prev["low"]); pc = float(prev["close"])
+            label = "Daily"
+            gran_label = "D1"
+
+        piv = calc_pivot_points(ph, pl, pc)
+        price = float(candles[-1]["close"])
+
+        # Determine price location
+        if price > piv["r2"]:   zone = f"🔴 Price above R2 — extreme overbought territory"
+        elif price > piv["r1"]: zone = f"📈 Price between PP and R2 — bullish (resistance at R2={piv['r2']})"
+        elif price > piv["pp"]: zone = f"📈 Price above PP — mild bullish bias"
+        elif price > piv["s1"]: zone = f"📉 Price between S1 and PP — mild bearish bias"
+        elif price > piv["s2"]: zone = f"📉 Price between S1 and S2 — bearish"
+        else:                   zone = f"🟢 Price below S2 — extreme oversold territory"
+
+        lines = [
+            f"📌 {label} Pivot Points — {symbol}",
+            f"{'═'*50}",
+            f"Previous {label}: H={ph}  L={pl}  C={pc}",
+            f"Current Price : {price}",
+            f"",
+            f"── Resistance ──────────────────────────────────",
+            f"R3 : {piv['r3']}",
+            f"R2 : {piv['r2']}",
+            f"R1 : {piv['r1']}",
+            f"",
+            f"── Pivot (PP) ──────────────────────────────────",
+            f"PP : {piv['pp']}  ◀ KEY LEVEL",
+            f"",
+            f"── Support ─────────────────────────────────────",
+            f"S1 : {piv['s1']}",
+            f"S2 : {piv['s2']}",
+            f"S3 : {piv['s3']}",
+            f"",
+            f"── Price Position ──────────────────────────────",
+            f"{zone}",
+            f"",
+            f"💡 PP = institutional reference. R1/S1 = first target. R2/S2 = second target.",
+            f"   Market makers often push price toward PP before major moves.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_ichimoku ────────────────────────────────────────────────────────
+    elif name == "deriv_ichimoku":
+        symbol    = args.get("symbol", "frxXAUUSD")
+        gran      = args.get("granularity", 14400)
+        tenkan    = args.get("tenkan", 9)
+        kijun     = args.get("kijun", 26)
+        senkou_b  = args.get("senkou_b", 52)
+        count     = max(args.get("count", 300), senkou_b + 50)
+
+        candles = await fetch_candles(symbol, gran, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(gran, f"{gran}s")
+        price = closes[-1]
+
+        ichi = calc_ichimoku(highs, lows, closes, tenkan, kijun, senkou_b)
+        if ichi is None:
+            return f"Not enough data for Ichimoku (need {senkou_b} candles minimum)."
+
+        tk_signal = "🟢 Bullish cross (Tenkan > Kijun)" if ichi["tk_cross"] == "bullish" else "🔴 Bearish cross (Tenkan < Kijun)"
+
+        if ichi["cloud_signal"] == "bullish":
+            cloud_color = "🟢 Green (Senkou A > B)" if ichi["senkou_a"] > ichi["senkou_b"] else "🔴 Red (Senkou B > A)"
+        elif ichi["cloud_signal"] == "bearish":
+            cloud_color = "🔴 Red (Senkou B > A)" if ichi["senkou_b"] > ichi["senkou_a"] else "🟢 Green (Senkou A > B)"
+        else:
+            cloud_color = "Mixed"
+
+        chikou_compare = closes[-kijun] if len(closes) > kijun else closes[0]
+        chikou_signal = "🟢 Chikou above price 26 periods ago (bullish)" if ichi["chikou"] > chikou_compare else "🔴 Chikou below price 26 periods ago (bearish)"
+
+        lines = [
+            f"☁️  Ichimoku Cloud({tenkan},{kijun},{senkou_b}) — {symbol} {gran_label}",
+            f"{'═'*56}",
+            f"Current Price  : {price}",
+            f"",
+            f"── Ichimoku Lines ──────────────────────────────────",
+            f"Tenkan-sen  ({tenkan:2}): {ichi['tenkan']}  (Conversion Line)",
+            f"Kijun-sen   ({kijun:2}): {ichi['kijun']}  (Base Line)",
+            f"Senkou Sp A    : {ichi['senkou_a']}  (Leading Span A)",
+            f"Senkou Sp B    : {ichi['senkou_b']}  (Leading Span B)",
+            f"Chikou Span    : {ichi['chikou']}  (Lagging Span)",
+            f"",
+            f"── Cloud ───────────────────────────────────────────",
+            f"Cloud Top      : {ichi['cloud_top']}",
+            f"Cloud Bot      : {ichi['cloud_bot']}",
+            f"Cloud Color    : {cloud_color}",
+            f"",
+            f"── Signals ─────────────────────────────────────────",
+            f"Cloud Signal   : {ichi['cloud_desc']}",
+            f"TK Cross       : {tk_signal}",
+            f"Chikou Signal  : {chikou_signal}",
+            f"",
+            f"── Interpretation ──────────────────────────────────",
+        ]
+
+        # Confluence scoring
+        bull = 0; bear = 0; notes = []
+        if ichi["cloud_signal"] == "bullish": bull += 3; notes.append("✅ Price above cloud")
+        elif ichi["cloud_signal"] == "bearish": bear += 3; notes.append("⚠️ Price below cloud")
+        else: notes.append("⚖️ Price inside cloud (indecision)")
+        if ichi["tk_cross"] == "bullish": bull += 2; notes.append("✅ Tenkan > Kijun")
+        else: bear += 2; notes.append("⚠️ Tenkan < Kijun")
+        if ichi["senkou_a"] > ichi["senkou_b"]: bull += 1; notes.append("✅ Cloud green (A>B)")
+        else: bear += 1; notes.append("⚠️ Cloud red (B>A)")
+        if ichi["chikou"] > chikou_compare: bull += 2; notes.append("✅ Chikou bullish")
+        else: bear += 2; notes.append("⚠️ Chikou bearish")
+
+        total = bull + bear
+        pct = round(bull / total * 100) if total else 50
+        overall = "🟢 BULLISH" if pct >= 65 else ("🔴 BEARISH" if pct <= 35 else "⚖️ NEUTRAL")
+        lines.extend(notes)
+        lines += [f"", f"Overall Bias   : {overall} ({pct}% bullish signals)"]
+        lines.append(f"\nCandles: {len(candles)} | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}")
+        return "\n".join(lines)
+
+    # ── deriv_parabolic_sar ───────────────────────────────────────────────────
+    elif name == "deriv_parabolic_sar":
+        symbol     = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        af_start   = args.get("af_start", 0.02)
+        af_step    = args.get("af_step", 0.02)
+        af_max     = args.get("af_max", 0.2)
+        count      = max(args.get("count", 200), 50)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        result = calc_parabolic_sar(highs, lows, af_start, af_step, af_max)
+        if result is None:
+            return "Not enough data for Parabolic SAR (need at least 10 candles)."
+
+        sar_val, trend = result
+        dist = abs(price - sar_val)
+        dist_pct = round(dist / price * 100, 3)
+
+        if trend == "up":
+            signal = f"🟢 UPTREND — SAR below price at {sar_val}"
+            action = "BUY / Hold Long — SAR acts as trailing stop below price"
+            flip_warn = f"Trend reversal if price drops to {sar_val}"
+        else:
+            signal = f"🔴 DOWNTREND — SAR above price at {sar_val}"
+            action = "SELL / Hold Short — SAR acts as trailing stop above price"
+            flip_warn = f"Trend reversal if price rises to {sar_val}"
+
+        lines = [
+            f"⚡ Parabolic SAR — {symbol} {gran_label}",
+            f"{'═'*50}",
+            f"Current Price  : {price}",
+            f"SAR Value      : {sar_val}",
+            f"Distance       : {round(dist, 5)} ({dist_pct}% from price)",
+            f"",
+            f"── Signal ──────────────────────────────────────",
+            f"{signal}",
+            f"Action         : {action}",
+            f"",
+            f"── Reversal Alert ──────────────────────────────",
+            f"{flip_warn}",
+            f"",
+            f"⚙️  AF Settings: start={af_start}, step={af_step}, max={af_max}",
+            f"   Higher AF = SAR tracks price tighter (more signals, more noise)",
+            f"   Lower AF  = SAR tracks price looser (fewer signals, cleaner trend)",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_supertrend ──────────────────────────────────────────────────────
+    elif name == "deriv_supertrend":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 10)
+        multiplier  = args.get("multiplier", 3.0)
+        count       = max(args.get("count", 200), period * 8 + 10)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        result = calc_supertrend(highs, lows, closes, period, multiplier)
+        if result is None:
+            return f"Not enough data for Supertrend({period}, {multiplier})."
+
+        st_val, direction = result
+        dist = abs(price - st_val)
+        dist_pct = round(dist / price * 100, 3)
+
+        if direction == "up":
+            signal = f"🟢 BULLISH — Price above Supertrend ({st_val})"
+            action = "BUY / Hold Long — Supertrend is dynamic support"
+            note   = f"Bearish flip if price closes below {st_val}"
+        else:
+            signal = f"🔴 BEARISH — Price below Supertrend ({st_val})"
+            action = "SELL / Hold Short — Supertrend is dynamic resistance"
+            note   = f"Bullish flip if price closes above {st_val}"
+
+        lines = [
+            f"🔺 Supertrend({period}, {multiplier}×ATR) — {symbol} {gran_label}",
+            f"{'═'*54}",
+            f"Current Price   : {price}",
+            f"Supertrend Line : {st_val}",
+            f"Distance        : {round(dist, 5)} ({dist_pct}%)",
+            f"",
+            f"── Signal ───────────────────────────────────────",
+            f"{signal}",
+            f"Action          : {action}",
+            f"",
+            f"── Reversal Watch ───────────────────────────────",
+            f"{note}",
+            f"",
+            f"⚙️  Settings: ATR Period={period}, Multiplier={multiplier}",
+            f"   Period 7, Mult 2.0 = scalping (tight, more signals)",
+            f"   Period 14, Mult 4.0 = swing (wide, fewer signals)",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_keltner ─────────────────────────────────────────────────────────
+    elif name == "deriv_keltner":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        ema_period  = args.get("ema_period", 20)
+        atr_period  = args.get("atr_period", 10)
+        multiplier  = args.get("multiplier", 2.0)
+        count       = max(args.get("count", 200), max(ema_period, atr_period) * 3)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        kc = calc_keltner(highs, lows, closes, ema_period, atr_period, multiplier)
+        if kc is None:
+            return f"Not enough data for Keltner Channel({ema_period}, {atr_period})."
+
+        width = round(kc["upper"] - kc["lower"], 5)
+        pct_pos = round((price - kc["lower"]) / (kc["upper"] - kc["lower"]) * 100, 1) if width else 50
+
+        if price > kc["upper"]:
+            zone = "🔴 Price ABOVE upper band — strong bullish breakout / overbought"
+        elif price >= kc["middle"] + (kc["upper"] - kc["middle"]) * 0.7:
+            zone = "📈 Price near upper band — bullish momentum"
+        elif price < kc["lower"]:
+            zone = "🟢 Price BELOW lower band — strong bearish breakout / oversold"
+        elif price <= kc["middle"] - (kc["middle"] - kc["lower"]) * 0.7:
+            zone = "📉 Price near lower band — bearish momentum"
+        else:
+            zone = "⚖️ Price near middle (EMA) — neutral zone"
+
+        lines = [
+            f"📊 Keltner Channel(EMA{ema_period}, ATR{atr_period}, ×{multiplier}) — {symbol} {gran_label}",
+            f"{'═'*58}",
+            f"Current Price  : {price}",
+            f"Upper Band     : {kc['upper']}",
+            f"Middle (EMA)   : {kc['middle']}",
+            f"Lower Band     : {kc['lower']}",
+            f"Channel Width  : {width}",
+            f"ATR            : {kc['atr']}",
+            f"%Position      : {pct_pos}% (0=lower, 50=mid, 100=upper)",
+            f"",
+            f"── Signal ───────────────────────────────────────",
+            f"{zone}",
+            f"",
+            f"💡 Squeeze: if Bollinger Bands fit inside Keltner → explosive breakout incoming.",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_donchian ────────────────────────────────────────────────────────
+    elif name == "deriv_donchian":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 20)
+        count       = max(args.get("count", 150), period + 20)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        dc = calc_donchian(highs, lows, period)
+        if dc is None:
+            return f"Not enough data for Donchian({period})."
+
+        width = round(dc["upper"] - dc["lower"], 5)
+        pct_pos = round((price - dc["lower"]) / width * 100, 1) if width else 50
+
+        if price >= dc["upper"]:
+            signal = f"🔴 Price AT/ABOVE upper band ({dc['upper']}) — fresh {period}-bar HIGH breakout"
+            action = "Breakout BUY signal — Turtle system would enter long here"
+        elif price <= dc["lower"]:
+            signal = f"🟢 Price AT/BELOW lower band ({dc['lower']}) — fresh {period}-bar LOW breakout"
+            action = "Breakout SELL signal — Turtle system would enter short here"
+        elif pct_pos > 66:
+            signal = f"📈 Price in upper third of channel ({pct_pos}%) — bullish momentum"
+            action = "Approaching breakout zone — watch for upper band test"
+        elif pct_pos < 33:
+            signal = f"📉 Price in lower third of channel ({pct_pos}%) — bearish momentum"
+            action = "Approaching breakdown zone — watch for lower band test"
+        else:
+            signal = f"⚖️ Price in middle of channel ({pct_pos}%) — no breakout signal"
+            action = "Wait for price to approach channel extremes"
+
+        lines = [
+            f"📊 Donchian Channel({period}) — {symbol} {gran_label}",
+            f"{'═'*52}",
+            f"Current Price  : {price}",
+            f"Upper Band     : {dc['upper']}  ({period}-bar high)",
+            f"Middle         : {dc['middle']}",
+            f"Lower Band     : {dc['lower']}  ({period}-bar low)",
+            f"Channel Width  : {width}",
+            f"%Position      : {pct_pos}% (0=lower, 50=mid, 100=upper)",
+            f"",
+            f"── Signal ───────────────────────────────────────",
+            f"{signal}",
+            f"Action         : {action}",
+            f"",
+            f"💡 Period 20 = medium-term. Period 55 = classic Turtle long-term breakout.",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_cci ─────────────────────────────────────────────────────────────
+    elif name == "deriv_cci":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 20)
+        count       = max(args.get("count", 150), period * 3)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        cci_val = calc_cci(highs, lows, closes, period)
+        if cci_val is None:
+            return f"Not enough data for CCI({period})."
+
+        if cci_val > 200:
+            signal = "🔴 EXTREME OVERBOUGHT (>200) — strong reversal risk / sell zone"
+        elif cci_val > 100:
+            signal = "🔴 Overbought (>100) — bearish reversal possible"
+        elif cci_val < -200:
+            signal = "🟢 EXTREME OVERSOLD (<-200) — strong reversal risk / buy zone"
+        elif cci_val < -100:
+            signal = "🟢 Oversold (<-100) — bullish reversal possible"
+        elif cci_val > 0:
+            signal = "📈 Bullish momentum (above zero line)"
+        else:
+            signal = "📉 Bearish momentum (below zero line)"
+
+        lines = [
+            f"📊 CCI({period}) — {symbol} {gran_label}",
+            f"{'═'*48}",
+            f"CCI Value      : {cci_val}",
+            f"Current Price  : {price}",
+            f"",
+            f"── Signal ───────────────────────────────────────",
+            f"{signal}",
+            f"",
+            f"── CCI Reference ────────────────────────────────",
+            f"  > +200 : Extreme overbought / strong reversal risk",
+            f"  > +100 : Overbought zone",
+            f"    0    : Neutral / zero line",
+            f"  < -100 : Oversold zone",
+            f"  < -200 : Extreme oversold / strong reversal risk",
+            f"",
+            f"💡 CCI zero-line cross: +0 = bullish entry, -0 = bearish entry.",
+            f"   Designed for commodities — especially effective for XAUUSD and XAGUSD.",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_williams_r ──────────────────────────────────────────────────────
+    elif name == "deriv_williams_r":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 14)
+        count       = max(args.get("count", 100), period * 3)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+
+        wr = calc_williams_r(highs, lows, closes, period)
+        if wr is None:
+            return f"Not enough data for Williams %R({period})."
+
+        if wr >= -20:
+            signal = "🔴 OVERBOUGHT (≥ -20) — potential reversal / sell zone"
+        elif wr <= -80:
+            signal = "🟢 OVERSOLD (≤ -80) — potential reversal / buy zone"
+        elif wr >= -40:
+            signal = "📈 Approaching overbought — bullish momentum"
+        elif wr <= -60:
+            signal = "📉 Approaching oversold — bearish momentum"
+        else:
+            signal = "⚖️ Neutral zone (-40 to -60)"
+
+        lines = [
+            f"📊 Williams %R({period}) — {symbol} {gran_label}",
+            f"{'═'*50}",
+            f"Williams %R    : {wr}",
+            f"Current Price  : {price}",
+            f"",
+            f"── Signal ───────────────────────────────────────",
+            f"{signal}",
+            f"",
+            f"── %R Reference ─────────────────────────────────",
+            f"  -0 to -20  : Overbought zone (bearish)",
+            f"  -20 to -80 : Neutral zone",
+            f"  -80 to -100: Oversold zone (bullish)",
+            f"",
+            f"💡 Williams %R reacts faster than Stochastic.",
+            f"   Use %R(7-9) for scalping, %R(14) for intraday, %R(21) for swing.",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv_heikin_ashi ─────────────────────────────────────────────────────
+    elif name == "deriv_heikin_ashi":
+        symbol       = args.get("symbol", "frxXAUUSD")
+        granularity  = args.get("granularity", 3600)
+        analyze_last = args.get("analyze_last", 10)
+        count        = max(args.get("count", 150), analyze_last + 20)
+
+        candles = await fetch_candles(symbol, granularity, count)
+        opens, highs, lows, closes = candles_to_ohlcv(candles)
+        gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
+
+        ha = calc_heikin_ashi(opens, highs, lows, closes, analyze_last)
+        if ha is None:
+            return "Not enough data for Heikin Ashi."
+
+        last = ha["last_candle"]
+        price = closes[-1]
+        ha_body = round(abs(last["close"] - last["open"]), 5)
+        ha_upper_shadow = round(last["high"] - max(last["open"], last["close"]), 5)
+        ha_lower_shadow = round(min(last["open"], last["close"]) - last["low"], 5)
+
+        # Candle type interpretation
+        if last["close"] > last["open"]:
+            ha_color = "🟢 Bullish HA candle"
+        else:
+            ha_color = "🔴 Bearish HA candle"
+
+        # Strong signal detection
+        if ha["strong_bull"]:
+            trend_desc = "🟢 STRONG UPTREND — 3+ consecutive bullish HA with no lower shadow"
+        elif ha["strong_bear"]:
+            trend_desc = "🔴 STRONG DOWNTREND — 3+ consecutive bearish HA with no upper shadow"
+        elif ha["trend"] == "BULLISH":
+            trend_desc = "📈 Bullish trend (more bullish HA candles in recent window)"
+        elif ha["trend"] == "BEARISH":
+            trend_desc = "📉 Bearish trend (more bearish HA candles in recent window)"
+        else:
+            trend_desc = "⚖️ Neutral / indecision — mixed HA candles"
+
+        lines = [
+            f"🕯️  Heikin Ashi — {symbol} {gran_label}",
+            f"{'═'*52}",
+            f"Current Price   : {price}",
+            f"",
+            f"── Last HA Candle ───────────────────────────────",
+            f"HA Open  : {last['open']}",
+            f"HA High  : {last['high']}",
+            f"HA Low   : {last['low']}",
+            f"HA Close : {last['close']}",
+            f"Color    : {ha_color}",
+            f"Body Size: {ha_body}",
+            f"Upper Shadow: {ha_upper_shadow}  {'(no upper = strong bull)' if ha_upper_shadow == 0 else ''}",
+            f"Lower Shadow: {ha_lower_shadow}  {'(no lower = strong bear)' if ha_lower_shadow == 0 else ''}",
+            f"",
+            f"── Trend Analysis (last {analyze_last} HA candles) ─────────────",
+            f"Bullish candles : {ha['bullish_candles']}",
+            f"Bearish candles : {ha['bearish_candles']}",
+            f"Trend           : {trend_desc}",
+            f"",
+            f"── Recent HA Candles ────────────────────────────",
+        ]
+        for c in ha["recent_5"]:
+            color_mark = "🟢" if c["close"] > c["open"] else "🔴"
+            lines.append(f"  {color_mark} O:{c['open']} H:{c['high']} L:{c['low']} C:{c['close']}")
+
+        lines += [
+            f"",
+            f"💡 Doji-shaped HA candle = trend exhaustion / watch for reversal.",
+            f"   Use HA to filter noise — combine with RSI or MACD for entry timing.",
+            f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
 
     else:
         return f"Unknown tool: {name}"
