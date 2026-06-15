@@ -108,6 +108,23 @@ The agent decides everything based on what it finds — no hardcoded rules:
 - `LeftPanel.vue` — session navigation
 - `FilePanel.vue` / `FilePanelContent.vue` — uploaded file management
 
+## Features
+
+### File Upload & Extraction
+Users dapat upload file (PDF, DOCX, PPTX, XLSX, CSV, TXT, gambar) langsung dari chat. Backend melakukan **server-side text extraction** tanpa sandbox — hasil teks langsung diinjeksi ke konteks agen sebagai `<file name="...">...</file>` sehingga agen bisa membaca isinya. Chart image diproses oleh vision model lalu dikonversi ke deskripsi teks sebelum diteruskan ke execution agent.
+
+### Session Sharing
+Setiap session bisa dibagikan publik via tombol "Share" di header chat. Session yang dibagikan bisa dilihat siapa saja lewat `/shared/{session_id}` tanpa login. Sharing bisa dicabut kapan saja.
+
+### Admin User Management
+User dengan `role = "admin"` di MongoDB bisa melihat, deactivate, dan activate user lain via API (`/auth/user/{id}/deactivate`, `/auth/user/{id}/activate`). Admin tidak bisa deactivate dirinya sendiri.
+
+### Password Reset via Email
+Jika SMTP dikonfigurasi (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_FROM`), user bisa reset password via 6-digit verification code yang dikirim ke email (TTL 5 menit, maks 3 percobaan).
+
+### TradingView Tools Filter
+Backend memfilter tools TradingView dari ~100+ ke **27 tools spesifik** yang relevan untuk trading signal. Filter ada di `backend/app/domain/services/tools/mcp.py` (`_TRADINGVIEW_ALLOWED`).
+
 ## Running on Replit
 
 Two primary workflows:
@@ -122,16 +139,33 @@ Validation workflows (run on-demand):
 
 ## Key Environment Variables
 
-All configured in Replit Secrets:
-- `API_KEY` / `API_BASE` — LLM provider credentials
-- `MODEL_NAME` — currently `qwen3.7-max`
-- `VISION_MODEL_NAME` — `qwen2.5-vl-72b-instruct` (for chart image analysis)
-- `MONGODB_URI` — MongoDB Atlas connection string
+All configured in Replit Secrets / userenv:
+
+**Required:**
+- `API_KEY` / `API_BASE` / `MODEL_NAME` / `MODEL_PROVIDER` — LLM provider credentials
+- `MONGODB_URI` / `MONGODB_DATABASE` — MongoDB Atlas
 - `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` — Redis Cloud (Asia Southeast)
-- `TAVILY_API_KEY` — web search
+- `JWT_SECRET_KEY` / `PASSWORD_SALT` — auth security
 - `AUTH_PROVIDER` — `password` (JWT-based auth)
+
+**Vision & planning (optional):**
+- `VISION_MODEL_NAME` / `VISION_API_BASE` / `VISION_API_KEY` — dedicated model for chart image analysis (`qwen2.5-vl-72b-instruct`)
+- `PLANNER_MODEL_NAME` / `PLANNER_API_BASE` / `PLANNER_API_KEY` — separate model for the planning step (optional, uses main model if not set)
+- `SUMMARY_MODEL_NAME` — model for auto-generating session titles
+
+**Search & proxy:**
+- `TAVILY_API_KEY` — web search
 - `SEARCH_PROVIDER` — `tavily`
 - `TV_PROXY_BASE` — TradingView screener proxy URL (avoids geo-blocking)
+- `SSL_VERIFY` — set `false` for custom LLM gateways with self-signed TLS certs
+
+**Advanced / optional:**
+- `EXTEND_SYSTEM_MESSAGE` — extra instructions appended to all agent system prompts at runtime (no prompt file edit needed)
+- `CONVERSATION_SAVE_PATH` — directory to save raw conversation logs to disk (e.g. `/tmp/conversations`)
+- `EXTRA_HEADERS` — JSON object of extra HTTP headers for every LLM request
+- `BROWSER_MAX_STEPS` — max tool calls before forced summarize (default: `100`)
+- `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` — SMTP config for password reset emails
+- `GOOGLE_ANALYTICS_ID` — Google Analytics ID (sent to frontend at startup)
 
 ## User Preferences
 

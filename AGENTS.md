@@ -107,6 +107,32 @@ This means:
 | **Search toolkit** | `info-search-web` | Economic calendar, news, fundamental events via Tavily |
 | **Message toolkit** | `message-notify-user`, `message-ask-user` | Live progress updates + user clarification |
 
+#### Message Toolkit Details
+
+- `message-notify-user(text, attachments?)` — sends a live narration. Rendered as **prose text** inside step cards (no chip). Attachments are sandbox file paths synced to storage and shown as download links.
+- `message-ask-user(text, attachments?, suggest_user_takeover?)` — pauses agent execution and waits for user input. Session moves to `WAITING` status. `suggest_user_takeover` enum: `"none"` or `"browser"`.
+
+#### TradingView Tools Filter
+
+The `MCPClientManager` in `domain/services/tools/mcp.py` filters TradingView tools down to **27 allowed tools** from the ~100+ available in the `tradingview-mcp` package. Only these tools are exposed to the agent:
+
+```python
+_TRADINGVIEW_ALLOWED = {
+    "top_gainers", "top_losers", "bollinger_scan", "rating_filter",
+    "coin_analysis", "consecutive_candles_scan", "advanced_candle_pattern",
+    "volume_breakout_scanner", "volume_confirmation_analysis",
+    "smart_volume_scanner", "multi_agent_analysis", "multi_timeframe_analysis",
+    "market_sentiment", "financial_news", "combined_analysis",
+    "backtest_strategy", "compare_strategies", "yahoo_price",
+    "market_snapshot", "get_trade_levels", "kelly_position_size",
+    "risk_based_position_size", "assess_trade_risk_full",
+    "get_live_price", "get_multi_price", "get_global_market_overview",
+    "save_trade_signal", "list_trade_signals", "recognize_market_pattern",
+}
+```
+
+To add or remove a TradingView tool from the agent's available set, edit `_TRADINGVIEW_ALLOWED` and restart the **Backend API**.
+
 ### MCP Servers (`mcp.json`)
 
 | Server | Key Tools | Instruments |
@@ -129,6 +155,30 @@ TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
 Sentiment   → ONLY for crypto Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT, etc.
              NOT applicable to Forex or Gold.
 ```
+
+### Session Status Flow
+
+```
+PENDING → RUNNING (planner creates plan, executor runs steps)
+        → WAITING (message-ask-user called; agent pauses, waits for user reply)
+        → RUNNING (user replies, execution resumes)
+        → COMPLETED
+```
+
+- `WAITING` is triggered when the execution agent calls `message_ask_user`. The session is persisted in this state so a page refresh or reconnect can resume correctly.
+- If a session is in `RUNNING` status when a new message arrives, the planner rolls back and replans from the new message.
+
+### Vision Pre-processing Pipeline
+
+When the user attaches an image (e.g. chart screenshot):
+
+1. **Pre-processing** (`plan_act.py`) — `_preprocess_images()` is called once upfront using the dedicated **vision model** (`VISION_MODEL_NAME`).
+2. The vision model generates a rich text description of the image.
+3. The description is **injected into the message** as `[Image Analysis]\n{description}`.
+4. Raw image data is cleared — downstream agents (planner + executor) only ever receive plain text.
+5. **Fallback** — if no vision model is configured, the raw image is passed directly to the main model. If the main model rejects it (not multimodal), the system retries text-only with a note to the agent.
+
+This design means the main model never needs multimodal capability as long as `VISION_MODEL_NAME` is set.
 
 ### Prompt Files (source of agent behavior)
 
@@ -154,6 +204,89 @@ Sentiment   → ONLY for crypto Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT
 
 ---
 
+## API Reference
+
+### Auth Endpoints (`/api/v1/auth`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/auth/login` | ❌ | Login with email + password → returns access + refresh token |
+| `POST` | `/auth/register` | ❌ | Register new user → returns tokens immediately |
+| `GET` | `/auth/status` | ❌ | Returns `auth_provider` setting |
+| `GET` | `/auth/me` | ✅ | Get current user info |
+| `POST` | `/auth/refresh` | ❌ | Refresh access token using refresh token |
+| `POST` | `/auth/logout` | ✅ | Revoke current token (blacklisted in Redis) |
+| `POST` | `/auth/change-password` | ✅ | Change password (requires old password) |
+| `POST` | `/auth/change-fullname` | ✅ | Update display name |
+| `POST` | `/auth/send-verification-code` | ❌ | Send 6-digit code to email (for password reset) |
+| `POST` | `/auth/reset-password` | ❌ | Reset password using verification code |
+| `GET` | `/auth/user/{user_id}` | ✅ Admin | Get any user by ID |
+| `POST` | `/auth/user/{user_id}/deactivate` | ✅ Admin | Deactivate a user account |
+| `POST` | `/auth/user/{user_id}/activate` | ✅ Admin | Reactivate a user account |
+
+**Password reset flow:**
+1. Call `send-verification-code` with email → 6-digit code sent via SMTP
+2. Code TTL: **5 minutes**, max **3 attempts**, **60s cooldown** between requests
+3. Call `reset-password` with email + code + new password
+
+**Admin endpoints** require `role = "admin"` on the user document. An admin cannot deactivate their own account.
+
+**Email config required for password reset** (set in Replit Secrets):
+- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_FROM`
+
+---
+
+### Session Endpoints (`/api/v1/sessions`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `PUT` | `/sessions` | ✅ | Create new session |
+| `GET` | `/sessions` | ✅ | List all sessions for current user |
+| `POST` | `/sessions` | ✅ | SSE stream of session list (live updates every 5s) |
+| `GET` | `/sessions/{id}` | ✅ | Get session with full event history |
+| `DELETE` | `/sessions` | ✅ | Delete all sessions for user |
+| `DELETE` | `/sessions/{id}` | ✅ | Delete a single session |
+| `POST` | `/sessions/{id}/stop` | ✅ | Stop a running session |
+| `POST` | `/sessions/{id}/chat` | ✅ | Send message → SSE stream of agent events |
+| `POST` | `/sessions/{id}/clear_unread_message_count` | ✅ | Mark messages as read |
+| `GET` | `/sessions/{id}/files` | ✅ (or public if shared) | List files attached to a session |
+| `POST` | `/sessions/{id}/share` | ✅ | Make session publicly viewable |
+| `DELETE` | `/sessions/{id}/share` | ✅ | Revoke public access |
+| `GET` | `/sessions/shared/{id}` | ❌ | Get a shared session without auth |
+| `GET` | `/sessions/{id}/share/files` | ❌ | Get files from a shared session |
+
+---
+
+### File Endpoints (`/api/v1/files`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/files` | ✅ | Upload a file (multipart/form-data) |
+| `GET` | `/files/{id}` | Signature | Download file (via signed URL) |
+| `GET` | `/files/{id}/download` | ✅ | Download file (authenticated) |
+| `GET` | `/files/{id}/info` | ✅ | Get file metadata |
+| `DELETE` | `/files/{id}` | ✅ | Delete a file |
+| `POST` | `/files/{id}/extract` | ✅ | Extract text from file (server-side, no sandbox) |
+| `POST` | `/files/{id}/signed-url` | ✅ | Generate a temporary signed download URL (max 30 min) |
+
+**Server-side text extraction** supports: PDF, PPTX, DOCX, XLSX, CSV, TXT.
+Uses: `pdfplumber`, `python-pptx`, `python-docx`, `openpyxl`, `pandas`.
+Returns `extracted_text` string + `char_count` — ready to inject into an AI prompt.
+
+**Signed URLs** — time-limited tokens that allow downloading a file without the `Authorization` header. Useful for embedding file links in frontend or sharing specific files.
+
+---
+
+### Config Endpoint (`/api/v1/config`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/config/frontend` | ❌ | Returns `auth_provider` and `google_analytics_id` |
+
+The frontend calls this on startup to determine whether to show the login UI and which analytics ID to use.
+
+---
+
 ## Development Environment (Replit)
 
 ### Running Services
@@ -171,18 +304,55 @@ To restart a workflow, use the Replit workflow UI or the `restart_workflow` agen
 
 ### Key Environment Variables (configured in Replit)
 
+#### Required
+
 | Variable | Purpose |
 |---|---|
 | `API_KEY` | LLM API key |
 | `API_BASE` | LLM API base URL |
-| `MODEL_NAME` | `qwen3.7-max` |
-| `VISION_MODEL_NAME` | `qwen2.5-vl-72b-instruct` |
+| `MODEL_NAME` | Main agent model — currently `qwen3.7-max` |
+| `MODEL_PROVIDER` | LLM provider — `openai` (OpenAI-compat) |
 | `MONGODB_URI` | MongoDB Atlas connection string |
+| `MONGODB_DATABASE` | Database name — currently `manus` |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis Cloud credentials |
-| `TAVILY_API_KEY` | Web search (Tavily) |
-| `AUTH_PROVIDER` | `password` (JWT-based auth) |
-| `SEARCH_PROVIDER` | `tavily` |
-| `TV_PROXY_BASE` | Optional proxy for TradingView scanner requests |
+| `JWT_SECRET_KEY` | Secret for signing JWT tokens (must be strong random string) |
+| `AUTH_PROVIDER` | `password` (JWT) / `none` (skip login) / `local` (hardcoded single user) |
+| `PASSWORD_SALT` | Salt string for password hashing |
+
+#### Vision & Planning (optional — enable extra capabilities)
+
+| Variable | Purpose |
+|---|---|
+| `VISION_MODEL_NAME` | Dedicated model for image analysis — `qwen2.5-vl-72b-instruct` |
+| `VISION_MODEL_PROVIDER` | Provider for vision model |
+| `VISION_API_BASE` | Base URL for vision model API |
+| `VISION_API_KEY` | API key for vision model |
+| `PLANNER_MODEL_NAME` | Optional separate model for planning step (vs execution) |
+| `PLANNER_MODEL_PROVIDER` | Provider for planner model |
+| `PLANNER_API_BASE` | Base URL for planner model |
+| `PLANNER_API_KEY` | API key for planner model |
+| `SUMMARY_MODEL_NAME` | Model used for auto-generating session titles |
+
+#### Search & Proxy
+
+| Variable | Purpose |
+|---|---|
+| `SEARCH_PROVIDER` | `tavily` / `bing_web` / `baidu_web` / `google` etc. |
+| `TAVILY_API_KEY` | Tavily web search API key |
+| `TV_PROXY_BASE` | Reverse proxy URL for TradingView scanner (avoids geo-blocking) |
+| `SSL_VERIFY` | Set `false` for custom LLM gateways with self-signed TLS certs |
+
+#### Advanced / Optional
+
+| Variable | Purpose |
+|---|---|
+| `EXTEND_SYSTEM_MESSAGE` | Extra instructions appended to **all** agent system prompts (planner + executor). Use for per-deployment customization without editing prompt files. |
+| `CONVERSATION_SAVE_PATH` | If set, saves raw conversation logs to disk at this path (e.g. `/tmp/conversations`). Useful for debugging. |
+| `EXTRA_HEADERS` | JSON object — extra HTTP headers sent with every LLM API request (e.g. `{"X-Custom-Header": "value"}`). |
+| `BROWSER_MAX_STEPS` | Max total tool calls across entire task before forced summarize (default: `100`). |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP config for password reset emails. All five required to enable password reset. |
+| `GOOGLE_ANALYTICS_ID` | Google Analytics Measurement ID (e.g. `G-XXXXXXXXXX`) — sent to frontend via `/config/frontend`. |
+| `LOCAL_AUTH_EMAIL` / `LOCAL_AUTH_PASSWORD` | Hardcoded credentials when `AUTH_PROVIDER=local` (single-user mode). |
 
 ---
 
