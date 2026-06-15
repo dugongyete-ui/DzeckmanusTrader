@@ -19,9 +19,19 @@ export function useToolInfo(tool?: Ref<ToolContent | undefined>) {
     
     // MCP tool
     if (tool.value.function?.startsWith('mcp_')) {
-      const mcpToolName = tool.value.function.replace(/^mcp_/, '');
+      // Format: mcp_{server}_{tool-name}
+      // Strip mcp_ prefix, then strip the server name (first segment), then format nicely
+      const withoutMcp = tool.value.function.replace(/^mcp_/, '');
+      const firstUnderscore = withoutMcp.indexOf('_');
+      const rawToolName = firstUnderscore !== -1
+        ? withoutMcp.substring(firstUnderscore + 1)
+        : withoutMcp;
+      // Replace underscores and hyphens with spaces, then Title Case each word
+      const displayName = rawToolName
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
       let functionArg = '';
-      
       const args = tool.value.args;
       if (args && Object.keys(args).length > 0) {
         const firstKey = Object.keys(args)[0];
@@ -32,11 +42,11 @@ export function useToolInfo(tool?: Ref<ToolContent | undefined>) {
           functionArg = JSON.stringify(firstValue).substring(0, 30) + '...';
         }
       }
-      
+
       return {
         icon: TOOL_ICON_MAP['mcp'] || null,
         name: t(TOOL_NAME_MAP['mcp'] || 'MCP Tool'),
-        function: mcpToolName,
+        function: displayName,
         functionArg: functionArg,
         view: TOOL_COMPONENT_MAP['mcp'] || null
       };
