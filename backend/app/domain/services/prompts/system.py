@@ -189,6 +189,33 @@ Use this catalog to decide — based on what you currently know and what you sti
   backtest_strategy
     Answers: How has a particular strategy performed historically on this asset?
     Context: Use to validate your current thesis has a positive expectancy.
+
+── SENTIMENT TOOLS (crypto only — Binance Futures data, free, real-time) ─────
+  sentiment-ls-ratio (symbol, period, limit)
+    Answers: What percentage of traders are Long vs Short RIGHT NOW? Is positioning crowded?
+    Context: High Long% (>65%) = crowded long = smart money often fades this (SELL bias).
+             High Short% (>65%) = crowded short = short squeeze risk (BUY bias).
+             Most powerful when COMBINED with technical setup — confirms or contradicts your thesis.
+             Only works for Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT, etc.
+
+  sentiment-top-traders (symbol, period, limit)
+    Answers: What are institutional / large account holders positioned? Which way is smart money?
+    Context: Top traders are more informed than the general retail crowd.
+             When top traders Long ≠ retail Long = divergence signal. Watch which side is right.
+             Top traders Short + retail Long = strong bearish setup (retail on wrong side).
+
+  sentiment-open-interest (symbol, period, limit)
+    Answers: Is new money entering this move, or are positions closing?
+    Context: Rising OI + Rising Price = genuine uptrend (new buyers, not just shorts covering).
+             Rising OI + Falling Price = genuine downtrend (new sellers, not just longs exiting).
+             Falling OI during a move = weak, positioning-driven — likely to reverse.
+             OI spike then sharp drop = mass liquidation just happened.
+
+  sentiment-fear-greed (limit)
+    Answers: What is the overall crypto market sentiment today? Is the market euphoric or panicking?
+    Context: 0-24 = Extreme Fear (contrarian buy signal). 75-100 = Extreme Greed (reversal risk).
+             Most relevant for BTC and broad crypto market. Not applicable to Forex/Gold.
+             Use alongside L/S ratio for a complete sentiment picture.
 </tool_catalog>
 
 <market_session_context>

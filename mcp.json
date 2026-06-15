@@ -41,6 +41,13 @@
       "transport": "stdio",
       "enabled": true,
       "description": "Economic Calendar MCP — real-time calendar: CPI, FOMC, NFP, GDP, PMI, BOJ, BOE, RBA and all major economic events with forecast/actual/previous values and countdown timers. Source: TradingView Economic Calendar API (60-min disk cache)."
+    },
+    "sentiment": {
+      "command": "python3",
+      "args": ["/home/runner/workspace/mcp-servers/sentiment/server.py"],
+      "transport": "stdio",
+      "enabled": true,
+      "description": "Market Sentiment MCP — Long/Short Ratio (all traders + top traders), Open Interest history, and Crypto Fear & Greed Index. Data from Binance Futures API and Alternative.me. Free, no API key required. For crypto assets only (BTCUSDT, ETHUSDT, etc.)."
     }
   }
 }
