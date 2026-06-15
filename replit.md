@@ -1,6 +1,6 @@
-# AI Dzeck × Claw
+# AI Dzeck
 
-Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Stocks) using real-time MCP-connected data sources — all streamed live.
+Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time. The agent is **market-aware and adaptive** — it scans market conditions first, diagnoses the regime, self-configures its indicator set, then delivers a structured trading decision. All analysis streams live to the frontend.
 
 ## Architecture
 
@@ -11,15 +11,33 @@ Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat wi
 
 **Database:** MongoDB Atlas (cloud) + Redis Cloud (Asia Southeast)
 
-## Agent Capabilities
+## Adaptive Analysis Protocol
 
-The agent uses a Plan → Execute → Update loop with three active toolkits:
+Every market analysis goes through 4 mandatory phases:
+
+| Phase | What happens |
+|---|---|
+| **0 — Scan** | Read session, price, ATR (volatility), ADX (trend strength) |
+| **1 — Diagnose** | Classify market regime: A (strong trend), B (transition), C (ranging), D (volatility spike) |
+| **2 — Configure** | Self-select indicators appropriate for the regime — trend tools for A, oscillators for C, standby for D |
+| **3 — Decide** | Deliver BUY/SELL/TUNGGU with Entry, SL (ATR-based), TP1, TP2, confidence, risk % |
+
+## Agent Toolkits
 
 - **MCP toolkit** — Deriv MCP (Forex/Gold), TradingView MCP (Crypto/Stocks), Time MCP, MongoDB MCP, Redis MCP
-- **Search toolkit** — Web search via Tavily for news and economic fundamentals
-- **Message toolkit** — User notifications and clarification prompts
+- **Search toolkit** — Web search via Tavily for news and economic calendar events
+- **Message toolkit** — Live progress notifications + user clarification
 
-MCP servers are defined in `mcp.json`.
+MCP servers are defined in `mcp.json`. Tool routing: Deriv for `frxXAUUSD`/`frxEURUSD`/etc., TradingView for `BINANCE:BTCUSDT`/stocks/indices.
+
+## Core Prompt Files
+
+Agent behavior is entirely controlled by three files in `backend/app/domain/services/prompts/`:
+- `system.py` — agent identity, adaptive protocol definition, regime rules, confidence thresholds
+- `planner.py` — plan structure (always: scan → configure → decide)
+- `execution.py` — per-regime tool selection and decision delivery format
+
+After editing any prompt file, restart the **Backend API** workflow.
 
 ## Running on Replit
 
@@ -38,6 +56,7 @@ All configured in Replit env vars:
 - `TAVILY_API_KEY` — web search
 - `AUTH_PROVIDER` — `password` (JWT-based)
 - `SEARCH_PROVIDER` — `tavily`
+- `TV_PROXY_BASE` — optional proxy for TradingView scanner
 
 ## User Preferences
 

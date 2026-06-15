@@ -1,12 +1,12 @@
 # AGENTS.md
 
-> Canonical guide for AI coding agents working on the **AI Dzeck × Claw** codebase.
+> Canonical guide for AI coding agents working on the **AI Dzeck** codebase.
 
 ---
 
 ## Project Overview
 
-**AI Dzeck** is an autonomous AI trading analyst platform. Users chat with an agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time using MCP-connected data sources — Deriv for Forex/Gold and TradingView for Crypto/Stocks. Analysis is streamed live to the frontend.
+**AI Dzeck** is an autonomous AI trading analyst platform. Users chat with an agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time using MCP-connected data sources. The agent is **market-aware and adaptive** — it scans current market conditions first, diagnoses the market regime, then self-configures its indicator set before delivering a decision. Analysis streams live to the frontend.
 
 | Service | Stack | Port (dev) | Entry Point |
 |---|---|---|---|
@@ -42,13 +42,19 @@ dzeck/
 │       │   └── services/
 │       │       ├── agents/   # Planner + Execution agents (LangChain)
 │       │       ├── flows/    # Plan-Act orchestration loop
-│       │       ├── prompts/  # System, planner, execution prompts
+│       │       ├── prompts/  # System, planner, execution prompts ← core agent logic
 │       │       └── toolkits/ # Tool registries (MCP, search, message)
 │       ├── application/      # Application services (auth, agent, file, token, email)
 │       ├── infrastructure/   # External integrations (DB, cache, search, MCP)
 │       ├── interfaces/       # API routes, schemas, error handlers, dependencies
 │       ├── core/             # Config (config.py)
 │       └── main.py
+├── mcp-servers/       # Local MCP server implementations
+│   ├── deriv/         # Deriv platform — Forex/Gold indicators & analysis
+│   ├── tradingview/   # TradingView wrapper — Crypto/Stocks (uses tradingview-mcp package)
+│   ├── time/          # Time & forex market session tools
+│   ├── mongodb/       # MongoDB Atlas query tools
+│   └── redis/         # Redis Cloud monitor tools
 ├── mcp.json           # MCP server definitions (time, mongodb, redis, deriv, tradingview)
 ├── .env.example       # Environment variable template
 └── replit.md          # Replit project overview and user preferences
@@ -58,30 +64,79 @@ dzeck/
 
 ## Agent Architecture
 
+### Orchestration Loop
+
 The agent uses a **Plan → Execute → Update** loop (`backend/app/domain/services/flows/plan_act.py`):
 
-1. **Planner** creates a step-by-step plan for the user's request
-2. **Execution agent** runs each step using the registered toolkits
-3. **Plan updater** revises remaining steps based on tool results
-4. Results stream to frontend via SSE
+1. **Planner** (`prompts/planner.py`) — creates a step-by-step plan structured around the 4-phase adaptive protocol
+2. **Execution agent** (`prompts/execution.py`) — runs each step, calls tools, interprets results
+3. **Plan updater** — revises remaining steps based on what the execution found (e.g. regime changes the next tool selection)
+4. **Summarizer** — delivers the final structured decision to the user
+5. Results stream to frontend via **SSE**
+
+### Adaptive Analysis Protocol (4 Phases)
+
+Every market analysis request mandatorily goes through four phases. This is enforced in all three prompt files.
+
+```
+Phase 0 — SCAN
+  Read raw market state: session activity, current price, ATR (volatility), ADX (trend strength)
+  Tools: forex_market_hours → deriv_market_snapshot → deriv_atr → deriv_technical_analysis
+         (or coin_analysis for TradingView assets)
+
+Phase 1 — DIAGNOSE
+  Classify market into one of four regimes based on scan data:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Regime A — Strong Trend    : ADX > 25, clear directional move  │
+  │ Regime B — Weak/Transition : ADX 20-25, mixed signals          │
+  │ Regime C — Ranging         : ADX < 20, price bouncing S/R      │
+  │ Regime D — Volatility Spike: ATR > 150% of average → NO ENTRY  │
+  └─────────────────────────────────────────────────────────────────┘
+
+Phase 2 — SELF-CONFIGURE
+  Choose indicator set and parameters appropriate for the diagnosed regime:
+  Regime A → trend-following  : deriv_smart_analysis + deriv_macd + deriv_ema(50/200)
+  Regime B → confirmation     : deriv_smart_analysis + deriv_rsi + deriv_bbands
+  Regime C → mean-reversion   : deriv_stoch + deriv_rsi + deriv_bbands + S/R levels
+  Regime D → standby          : notify user, do NOT run entry analysis
+
+Phase 3 — DECIDE
+  Synthesize results into a structured decision:
+  Regime → Key signals → BUY/SELL/TUNGGU → Entry / SL (ATR-based) / TP1 / TP2 / Risk %
+```
 
 ### Active Toolkits
 
 | Toolkit | Tools | Purpose |
 |---|---|---|
-| **MCP toolkit** | All tools from `mcp.json` | Deriv/TradingView market data, MongoDB, Redis, time |
-| **Search toolkit** | `info_search_web` | Web search via Tavily for news/fundamentals |
-| **Message toolkit** | `message_notify_user`, `message_ask_user` | User notifications and clarification |
+| **MCP toolkit** | All tools from `mcp.json` | Market data, indicators, DB persistence, time/session |
+| **Search toolkit** | `info_search_web` | Economic calendar, news, fundamental events via Tavily |
+| **Message toolkit** | `message_notify_user`, `message_ask_user` | Live progress updates + user clarification |
 
 ### MCP Servers (`mcp.json`)
 
-| Server | Purpose |
+| Server | Key Tools | Instruments |
+|---|---|---|
+| `time` | `forex_market_hours` | All — session/time checks |
+| `deriv` | `deriv_smart_analysis`, `deriv_rsi`, `deriv_macd`, `deriv_bbands`, `deriv_ema`, `deriv_atr`, `deriv_stoch`, `deriv_technical_analysis` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
+| `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_breakout_scanner`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
+| `mongodb` | find, aggregate, count | Signal storage and history |
+| `redis` | get/set, stats | Real-time data cache |
+
+### Tool Routing Rule
+
+```
+Deriv MCP  → ONLY for Deriv platform: frxXAUUSD, frxEURUSD, frxGBPUSD, frxXAGUSD, etc.
+TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
+```
+
+### Prompt Files (source of agent behavior)
+
+| File | Role |
 |---|---|
-| `time` | Current time / market session checks |
-| `mongodb` | Persist/query trade signals and history |
-| `redis` | Fast cache for real-time data |
-| `deriv` | Forex & Gold market data + multi-timeframe analysis |
-| `tradingview` | Crypto, Stocks, all other asset classes |
+| `prompts/system.py` | Agent identity + full adaptive protocol definition + regime rules + confidence thresholds |
+| `prompts/planner.py` | Plan creation rules — always generates 3-step scan→configure→decide structure for analysis |
+| `prompts/execution.py` | Step execution rules — which tools to call per regime, notification cadence, decision format |
 
 ---
 
@@ -98,6 +153,8 @@ Two workflows run in parallel:
 
 To restart a workflow, use the Replit workflow UI or the `restart_workflow` agent tool.
 
+> **Important:** After editing any file in `backend/app/domain/services/prompts/`, restart the **Backend API** workflow for changes to take effect.
+
 ### Key Environment Variables (configured in Replit)
 
 | Variable | Purpose |
@@ -111,6 +168,7 @@ To restart a workflow, use the Replit workflow UI or the `restart_workflow` agen
 | `TAVILY_API_KEY` | Web search (Tavily) |
 | `AUTH_PROVIDER` | `password` (JWT-based auth) |
 | `SEARCH_PROVIDER` | `tavily` |
+| `TV_PROXY_BASE` | Optional proxy for TradingView scanner requests |
 
 ---
 
@@ -156,8 +214,9 @@ pnpm build             # production build (catches TS + template errors)
 1. Ensure both workflows are running
 2. Open the app preview (port 5000)
 3. Register/login (or set `AUTH_PROVIDER=none`)
-4. Create session, send a market analysis request (e.g. "Analisa XAUUSD sekarang")
-5. Check backend logs in the **Backend API** workflow console
+4. Create a session, send: `"Analisa XAUUSD sekarang"`
+5. Verify the agent goes through Scan → Diagnose → Configure → Decide phases in the backend logs
+6. Check backend logs in the **Backend API** workflow console
 
 ---
 
@@ -172,6 +231,22 @@ pnpm build             # production build (catches TS + template errors)
 - Dependency management: **uv** + `pyproject.toml` (PEP 621)
 - No enforced linter/formatter (no Ruff, Black, or Flake8 configured)
 - Async-first: use `async def` for route handlers and service methods
+
+### Modifying Agent Behavior
+
+All agent behavior is controlled via the three prompt files in `backend/app/domain/services/prompts/`:
+- To change how the agent thinks → edit `system.py`
+- To change how plans are structured → edit `planner.py`
+- To change how steps are executed → edit `execution.py`
+- Always restart the **Backend API** workflow after prompt changes
+
+### Adding a New MCP Server
+
+1. Add the server script to `mcp-servers/<name>/server.py`
+2. Register it in `mcp.json` with `"enabled": true`
+3. Add tool routing rules in `system.py` under `<tool_routing>`
+4. Add relevant execution rules in `execution.py` for the new tool set
+5. Restart **Backend API**
 
 ### Frontend (TypeScript / Vue)
 
@@ -198,8 +273,27 @@ Mappings from tool name → icon → component live in `frontend/src/constants/t
 ### Backend Logs
 Check the **Backend API** workflow console in Replit, or read `/tmp/logs/Backend_API_*.log`.
 
+Look for these log patterns to trace the adaptive protocol:
+```
+"Agent started processing message"   → planner triggered
+"created plan with N steps"          → plan created (should be 3 steps for analysis)
+"executing step 1"                   → Phase 0 scan running
+"executing step 2"                   → Phase 1+2 diagnose & configure running
+"executing step 3"                   → Phase 3 decision delivery
+"state changed ... to COMPLETED"     → analysis finished
+```
+
 ### Frontend Logs
 Check the **Start application** workflow console, or the browser DevTools console.
+
+### Common Issues
+
+| Issue | Likely Cause | Fix |
+|---|---|---|
+| Agent jumps straight to decision without scanning | Prompt cache from old version | Restart Backend API workflow |
+| MCP tool returns empty / error | MCP server not running or wrong symbol format | Check `mcp.json`, verify symbol routing (Deriv vs TradingView) |
+| Agent always says TUNGGU | Confluence consistently < 58% | Check ATR/ADX values in logs — may be a market condition, not a bug |
+| TradingView tools fail | `TV_PROXY_BASE` misconfigured or scanner.tradingview.com blocked | Set/check `TV_PROXY_BASE` env var |
 
 ### Resetting State
 
