@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from pydantic import Field, AliasChoices
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     planner_api_base: str | None = None
     planner_api_key: str | None = None
 
-    # Agent step limit — env var: MAX_STEPS (backward compat: BROWSER_MAX_STEPS also accepted)
-    max_steps: int = Field(default=100, validation_alias=AliasChoices("max_steps", "browser_max_steps"))
+    # Agent step limit — env var: MAX_STEPS
+    max_steps: int = Field(default=100, alias="max_steps")
 
     # Agent behavior
     conversation_save_path: str | None = None    # dir to save conversation logs, e.g. "/tmp/conversations"
