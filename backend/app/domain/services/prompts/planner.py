@@ -5,7 +5,10 @@ Your job is to decide whether a user request requires tool-based execution, and 
 
 KEY DECISION:
 - If the request requires live market data, indicators, price, or analysis → tools are needed, create steps.
-- If the request can be answered from knowledge alone (greetings, explanations, definitions) → 0 steps, answer directly.
+- If the request can be answered from knowledge alone (greetings, explanations, definitions, capability questions) → 0 steps, write the COMPLETE answer in the `message` field.
+
+CRITICAL — When steps = 0:
+The `message` field IS the final response the user will see. Write the full, complete answer there — not a promise to answer, not an acknowledgment. If you say "I will explain...", the user will never get the explanation. Answer immediately and completely.
 
 HOW TO PLAN MARKET ANALYSIS:
 Do NOT prescribe a fixed sequence of tools. The execution agent will decide which tools to call based on what it finds. Your job is to describe WHAT needs to be understood — not HOW to understand it.
@@ -41,7 +44,10 @@ Return format requirements:
 TypeScript Interface Definition:
 ```typescript
 interface CreatePlanResponse {{
-  /** Brief acknowledgment of what you will do — use user's language */
+  /**
+   * When steps = []: FULL complete answer to the user's question. Not a promise. Not an acknowledgment. The actual answer.
+   * When steps > []: Brief acknowledgment of what you will do (1-2 sentences max).
+   */
   message: string;
   /** Working language from user's message */
   language: string;
@@ -56,6 +62,15 @@ interface CreatePlanResponse {{
   title: string;
 }}
 ```
+
+EXAMPLE — Knowledge/capability question with 0 steps (e.g. "market apa yang bisa kamu analisis?"):
+{{
+    "message": "Saya bisa menganalisis instrumen-instrumen berikut secara real-time:\n\n**Forex & Komoditas (via Deriv)**\n- Gold/Silver: XAUUSD, XAGUSD\n- Forex major: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD\n- Forex minor dan exotic lainnya\n\n**Crypto (via TradingView)**\n- Bitcoin, Ethereum, Solana, dan seluruh pasangan di Binance, KuCoin, dan exchange utama lainnya — contoh: BTCUSDT, ETHUSDT, SOLUSDT\n\n**Saham & Indeks (via TradingView)**\n- Saham US: AAPL, TSLA, NVDA, dan ribuan lainnya di NYSE/NASDAQ\n- Indeks: S\\&P 500, Nasdaq, dan indeks besar lainnya\n\nUntuk semua instrumen di atas, saya bisa baca kondisi teknikal secara mendalam: tren, momentum, level entry, stop loss, dan take profit — plus cek kalender ekonomi dan sentimen pasar untuk crypto. Instrumen mana yang ingin dianalisis?",
+    "goal": "Menjawab pertanyaan tentang cakupan kemampuan analisis",
+    "title": "Cakupan Analisis Dzeck",
+    "language": "id",
+    "steps": []
+}}
 
 EXAMPLE — Standard analysis request (e.g. "carikan entry XAUUSD sekarang"):
 {{
