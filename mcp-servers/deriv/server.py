@@ -1709,19 +1709,41 @@ async def _dispatch(name: str, args: dict) -> str:
     # ── deriv_market_snapshot ─────────────────────────────────────────────────
     elif name == "deriv-market-snapshot":
         symbols = args.get("symbols", ["frxXAUUSD","frxXAGUSD","frxEURUSD","frxGBPUSD","frxUSDJPY","cryBTCUSD"])
-        results = await asyncio.gather(
-            *[deriv_request({"ticks": sym, "subscribe": 0}) for sym in symbols],
-            return_exceptions=True
-        )
+
+        async def _snapshot_one(sym: str):
+            resp = await deriv_request({
+                "ticks_history": sym,
+                "count": 1,
+                "end": "latest",
+                "granularity": 60,
+                "style": "candles"
+            })
+            if "error" in resp:
+                return sym, None
+            candles = resp.get("candles", [])
+            if not candles:
+                return sym, None
+            c = candles[-1]
+            return sym, {
+                "price": float(c.get("close", 0)),
+                "open":  float(c.get("open",  0)),
+                "high":  float(c.get("high",  0)),
+                "low":   float(c.get("low",   0)),
+                "epoch": c.get("epoch")
+            }
+
+        results = await asyncio.gather(*[_snapshot_one(s) for s in symbols], return_exceptions=True)
         lines = ["📊 Deriv Market Snapshot\n",
-                 f"{'Symbol':<15} {'Price':>12} {'Bid':>12} {'Ask':>12}", "-" * 55]
-        for sym, resp in zip(symbols, results):
-            if isinstance(resp, Exception) or "error" in resp:
+                 f"{'Symbol':<15} {'Price':>12} {'High':>12} {'Low':>12}", "-" * 55]
+        for item in results:
+            if isinstance(item, Exception):
+                continue
+            sym, data = item
+            if data is None:
                 lines.append(f"{sym:<15} {'ERROR':>12}")
             else:
-                tick = resp.get("tick", {})
-                lines.append(f"{sym:<15} {str(tick.get('quote','N/A')):>12} "
-                             f"{str(tick.get('bid','N/A')):>12} {str(tick.get('ask','N/A')):>12}")
+                ts = datetime.utcfromtimestamp(data["epoch"]).strftime("%H:%M UTC") if data["epoch"] else ""
+                lines.append(f"{sym:<15} {data['price']:>12} {data['high']:>12} {data['low']:>12}  {ts}")
         lines.append(f"\nSnapshot at: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
         return "\n".join(lines)
 
