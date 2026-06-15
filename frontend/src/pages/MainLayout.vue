@@ -10,7 +10,6 @@
       </div>
     </div>
   </div>
-  <TakeOverView />
   <CustomDialog />
   <SessionFileList />
   <SettingsDialog />
@@ -21,7 +20,6 @@
 import LeftPanel from '@/components/LeftPanel.vue';
 import CustomDialog from '@/components/ui/CustomDialog.vue';
 import ContextMenu from '@/components/ui/ContextMenu.vue';
-import TakeOverView from '@/components/TakeOverView.vue';
 import SessionFileList from '@/components/SessionFileList.vue';
 import FilePanel from '@/components/FilePanel.vue';
 import SettingsDialog from '@/components/settings/SettingsDialog.vue';
