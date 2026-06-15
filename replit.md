@@ -24,6 +24,8 @@ The agent does not follow a checklist. It reasons like a professional trader:
 Before calling any tool, the agent explains **why** it needs it.
 After reading a result, the agent explains **what it means** in context.
 
+**Notification protocol (mandatory):** The agent MUST call `message-notify-user` before AND after every tool call. These live narrations appear as text inside step cards — the agent's own words as it thinks aloud, not templates. Do not add example strings or hardcoded phrasing to the notification prompt — the agent must speak in its own voice.
+
 This means the agent may use RSI(9) one session and RSI(21) the next — based on what the market demands. It may use Ichimoku on a trending day and skip it entirely on a ranging day. No two analyses are identical.
 
 ## MCP Servers (7 servers — ~76 tools total)

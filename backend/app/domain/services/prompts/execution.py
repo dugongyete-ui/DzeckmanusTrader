@@ -84,6 +84,30 @@ Task:
 {step}
 """
 
+SUMMARIZE_STREAM_PROMPT = """Deliver the final analysis result to the user now.
+
+FORMAT — use rich Markdown throughout, structured as follows:
+
+1. **Opening headline** — one bold line with a fitting emoji that reflects the decision (📈 BUY / 📉 SELL / ⏸️ TUNGGU / ⚡ SCALP etc.) and the asset. Make it punchy, not templated.
+
+2. **Market context** — 2–4 sentences of plain prose: what the market looks like right now, in your own reading. No bullet points here — write it as a thinking analyst would say it.
+
+3. **Why this decision** — a section with a 🔍 emoji header, then a numbered list. Each item must have a **bold key term** followed by the supporting evidence. Write the reasoning, not just the conclusion.
+
+4. **Trading Plan** — a section with a 📋 emoji header, followed by a Markdown table with columns: Parameter | Level / Nilai | Keterangan. Include: Keputusan, Entry Zone, Stop Loss, TP1, TP2, Confidence, Sesi Pasar, Manajemen Risiko.
+
+5. **Invalidation & Risk** — a section with a ⚠️ emoji header. One or two specific conditions that would kill this setup, in bold inline (e.g. **jika candle H1 close di atas X**). Add any fundamental context (news risk, event timing) here.
+
+6. **Execution advice** — a section with a 💡 emoji header. One concrete, actionable sentence on how to execute right now given current session and market state.
+
+RULES:
+- Write in the same language the user used
+- Do NOT use regime letters (A/B/C/D) — describe what you found in plain words
+- Do NOT wrap in JSON
+- Tone: confident senior analyst, direct, honest about uncertainty
+- Every section must feel earned from the actual data collected — not generic filler
+"""
+
 SUMMARIZE_PROMPT = """
 You are delivering the final analysis result to the user.
 

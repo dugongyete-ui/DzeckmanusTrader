@@ -91,11 +91,13 @@ The agent does **not** follow a fixed protocol or indicator checklist. It operat
 Before calling any tool, the agent states **why** it needs it.
 After reading a result, the agent states **what it means** in context — not just the raw numbers.
 
+**Notification protocol (mandatory):** The agent MUST call `message-notify-user` before AND after every tool call. Before: what it is about to check and why. After: what it found and what it means. These narrations appear as live text inside step cards in the frontend — not templates, but the agent's own words as it thinks.
+
 This means:
 - No two analyses are identical, even for the same asset
 - The agent may call RSI(9) one day and RSI(21) the next — based on current volatility
 - The agent may use Ichimoku on a trending day and skip it entirely on a ranging day
-- The agent explains its reasoning at every step, making the analysis transparent
+- The agent narrates its thinking live at every tool call, making the analysis transparent and conversational
 
 ### Active Toolkits
 
@@ -134,14 +136,21 @@ Sentiment   → ONLY for crypto Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT
 |---|---|
 | `prompts/system.py` | Agent identity + tool catalog (what each tool measures) + tool routing + decision format + security rules |
 | `prompts/planner.py` | Goal-oriented planning — describes *what* to understand, not *which tools* to call. Step count varies by complexity. |
-| `prompts/execution.py` | Reasoning-first execution — agent explains why before calling each tool, interprets results in context, chooses all parameters autonomously |
+| `prompts/execution.py` | Reasoning-first execution — agent MUST call `message-notify-user` before AND after every tool call; explains why before each call and what the result means after; all parameters chosen autonomously |
 
 #### How to modify agent behavior
 
 - To change **what the agent is** and what tools it knows about → edit `system.py`
 - To change **how plans are structured** (step granularity, how goals are described) → edit `planner.py`
-- To change **how the agent reasons** during execution (notification style, parameter logic, decision format) → edit `execution.py`
+- To change **how the agent reasons** during execution (notification cadence, parameter logic, decision format) → edit `execution.py`
 - **Always restart the Backend API workflow** after any prompt change
+
+#### Notification rendering (frontend)
+
+`message-notify-user` tool events render as **text prose** inside step cards via `ToolUse.vue`:
+- `tool.name === 'message' && tool.args?.text` → rendered as markdown text (no chip)
+- All other tools → rendered as a clickable chip with status indicator
+- The live narration appears between tool chips as the agent works through each step
 
 ---
 

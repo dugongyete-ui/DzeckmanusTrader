@@ -359,9 +359,6 @@ const handleMessageEvent = (messageData: MessageEventData) => {
 
 // Handle tool event
 const handleToolEvent = (toolData: ToolEventData) => {
-  // Debug: log every tool event to browser console
-  console.log('[TOOL]', toolData.status, toolData.function, 'name:', toolData.name, 'args:', toolData.args);
-
   // Update thinking text: show current action while calling, reset to null when done
   if (toolData.status === 'calling') {
     currentThinkingText.value = t(TOOL_FUNCTION_MAP[toolData.function] || toolData.function);

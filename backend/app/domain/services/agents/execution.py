@@ -5,7 +5,7 @@ from app.domain.models.message import Message, VisionImage
 from app.domain.services.agents.base import BaseAgent
 from app.domain.repositories.agent_repository import AgentRepository
 from app.domain.services.prompts.system import SYSTEM_PROMPT
-from app.domain.services.prompts.execution import EXECUTION_SYSTEM_PROMPT, EXECUTION_PROMPT, SUMMARIZE_PROMPT
+from app.domain.services.prompts.execution import EXECUTION_SYSTEM_PROMPT, EXECUTION_PROMPT, SUMMARIZE_PROMPT, SUMMARIZE_STREAM_PROMPT
 from app.domain.models.event import (
     BaseEvent,
     StepEvent,
@@ -144,13 +144,7 @@ class ExecutionAgent(BaseAgent):
         await self._ensure_memory()
         context = list(self.memory.get_messages())
 
-        STREAM_PROMPT = (
-            "Deliver the final result to the user. "
-            "Write a comprehensive, detailed response in the same language as the user used. "
-            "Use Markdown formatting where helpful. "
-            "Do NOT wrap your response in JSON."
-        )
-        stream_context = context + [LCHumanMessage(content=STREAM_PROMPT)]
+        stream_context = context + [LCHumanMessage(content=SUMMARIZE_STREAM_PROMPT)]
 
         full_text = ""
         try:
