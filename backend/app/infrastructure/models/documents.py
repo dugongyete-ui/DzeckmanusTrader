@@ -84,7 +84,6 @@ class SessionDocument(BaseDocument[Session], id_field="session_id", domain_model
     """MongoDB model for Session"""
     session_id: str
     user_id: str  # User ID that owns this session
-    sandbox_id: Optional[str] = None
     agent_id: str
     task_id: Optional[str] = None
     title: Optional[str] = None

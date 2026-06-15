@@ -126,7 +126,7 @@ EXAMPLE — Multi-asset request (e.g. "analisa XAUUSD dan EURUSD"):
 User message:
 {message}
 
-Attachments (file paths in sandbox):
+Attachments:
 {attachments}
 
 Note on attachments:

@@ -19,11 +19,11 @@ class MessageToolkit(BaseToolkit):
         text: str,
         attachments: Optional[Union[str, List[str]]] = None,
     ) -> ToolResult:
-        """Send a message to user without requiring a response. Use for progress updates, task completion notices, or delivering results with optional file attachments.
+        """Send a message to user without requiring a response. Use for live narration, progress updates, and delivering results.
 
         Args:
             text: Message text to display to user
-            attachments: (Optional) List of sandbox file paths to attach (e.g. ["/home/runner/report.pdf"]). Files are synced to storage and shown as download links.
+            attachments: (Optional) List of file paths to attach. Files are shown as download links.
         """
         return ToolResult(success=True, message="OK")
     
@@ -32,13 +32,11 @@ class MessageToolkit(BaseToolkit):
         self,
         text: str,
         attachments: Optional[Union[str, List[str]]] = None,
-        suggest_user_takeover: Optional[str] = None
     ) -> ToolResult:
-        """Ask user a question and wait for response. Use for requesting clarification, asking for confirmation, or gathering additional information.
-        
+        """Ask user a question and wait for their response. Use only when you genuinely cannot proceed without user input — for example, when the trading symbol is completely ambiguous.
+
         Args:
             text: Question text to present to user
-            attachments: (Optional) List of question-related files or reference materials
-            suggest_user_takeover: (Optional) Suggested operation for user takeover (enum: "none" or "browser")
+            attachments: (Optional) List of files to include alongside the question
         """
         return ToolResult(success=True)

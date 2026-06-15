@@ -189,7 +189,7 @@ class PlannerAgent(BaseAgent):
         pre_extracted = re.findall(r'<file name="([^"]+)">', message.message)
         if pre_extracted:
             context_note = f"\n[Files available: {', '.join(pre_extracted)}]"
-        # Raw sandbox attachments
+        # Raw file attachments
         elif message.attachments:
             file_names = [a.split("/")[-1] for a in message.attachments if a]
             if file_names:

@@ -52,7 +52,7 @@ class PlanActFlow(BaseFlow):
         self._step_history: List[dict] = []  # AgentHistoryList — tracks every step result
 
         settings = get_settings()
-        self._max_steps: int = settings.browser_max_steps
+        self._max_steps: int = settings.max_steps
 
         tools = [
             MessageToolkit(),
@@ -162,7 +162,7 @@ class PlanActFlow(BaseFlow):
 
                         has_pre_extracted = "<file name=" in message.message
 
-                        # Safety net A: 0 steps + raw sandbox attachments (no <file> tags)
+                        # Safety net A: 0 steps + raw file attachments (no <file> tags)
                         if len(self.plan.steps) == 0 and message.attachments and not has_pre_extracted:
                             from app.domain.models.plan import Step as PlanStep
                             file_list = "\n".join(message.attachments)
