@@ -65,9 +65,9 @@ interface CreatePlanResponse {{
 
 EXAMPLE — Knowledge/capability question with 0 steps (e.g. "market apa yang bisa kamu analisis?"):
 {{
-    "message": "Saya bisa menganalisis instrumen-instrumen berikut secara real-time:\n\n**Forex & Komoditas (via Deriv)**\n- Gold/Silver: XAUUSD, XAGUSD\n- Forex major: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD\n- Forex minor dan exotic lainnya\n\n**Crypto (via TradingView)**\n- Bitcoin, Ethereum, Solana, dan seluruh pasangan di Binance, KuCoin, dan exchange utama lainnya — contoh: BTCUSDT, ETHUSDT, SOLUSDT\n\n**Saham & Indeks (via TradingView)**\n- Saham US: AAPL, TSLA, NVDA, dan ribuan lainnya di NYSE/NASDAQ\n- Indeks: S\\&P 500, Nasdaq, dan indeks besar lainnya\n\nUntuk semua instrumen di atas, saya bisa baca kondisi teknikal secara mendalam: tren, momentum, level entry, stop loss, dan take profit — plus cek kalender ekonomi dan sentimen pasar untuk crypto. Instrumen mana yang ingin dianalisis?",
-    "goal": "Menjawab pertanyaan tentang cakupan kemampuan analisis",
-    "title": "Cakupan Analisis Dzeck",
+    "message": "<your complete, natural answer here — write it in your own words as a professional trader would, based on what you actually know>",
+    "goal": "Menjawab pertanyaan kemampuan analisis",
+    "title": "Cakupan Analisis",
     "language": "id",
     "steps": []
 }}
