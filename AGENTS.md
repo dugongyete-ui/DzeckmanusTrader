@@ -113,6 +113,7 @@ This means:
 | `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
 | `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_confirmation_analysis`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
 | `economic-calendar` | `calendar-today`, `calendar-upcoming`, `calendar-find-event`, `calendar-get-week` | All — fundamental event queries |
+| `sentiment` | `sentiment-ls-ratio`, `sentiment-top-traders`, `sentiment-open-interest`, `sentiment-fear-greed` | Crypto only — Binance Futures pairs (BTCUSDT, ETHUSDT, etc.) |
 | `mongodb` | find, aggregate, count | Signal storage and history |
 | `redis` | get/set, stats | Real-time data cache |
 
@@ -123,6 +124,8 @@ This is a **technical constraint**, not a strategy rule — it reflects what eac
 ```
 Deriv MCP   → ONLY for Deriv platform instruments: frxXAUUSD, frxEURUSD, frxGBPUSD, frxXAGUSD, etc.
 TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
+Sentiment   → ONLY for crypto Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT, etc.
+             NOT applicable to Forex or Gold.
 ```
 
 ### Prompt Files (source of agent behavior)

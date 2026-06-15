@@ -26,7 +26,7 @@ After reading a result, the agent explains **what it means** in context.
 
 This means the agent may use RSI(9) one session and RSI(21) the next — based on what the market demands. It may use Ichimoku on a trending day and skip it entirely on a ranging day. No two analyses are identical.
 
-## MCP Servers (6 servers — ~72 tools total)
+## MCP Servers (7 servers — ~76 tools total)
 
 All servers defined in `mcp.json`, launched as stdio subprocesses.
 
@@ -38,6 +38,7 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 | **deriv** | 24 | Deriv platform: Gold (frxXAUUSD), Forex pairs — price, candles, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, CCI, Williams%R, Keltner, Donchian, Parabolic SAR, Smart Analysis, etc. |
 | **tradingview** | 29 | Crypto/Stocks/Indices — screener, multi-timeframe analysis, volume confirmation, backtesting, market sentiment (proxy via `TV_PROXY_BASE`) |
 | **economic-calendar** | 4 | Real-time economic calendar: CPI, FOMC, NFP, GDP, PMI, all central bank decisions — with forecast/actual/previous and WIB countdown. Source: TradingView Calendar API (60-min disk cache at `/tmp/ecocal_cache.json`) |
+| **sentiment** | 4 | Market sentiment for crypto: Long/Short Ratio, Top Trader Positioning, Open Interest, Fear & Greed Index. Data: Binance Futures API + Alternative.me. Free, no API key, real-time. |
 
 ### Economic Calendar Tools
 - `calendar-today` — all events releasing today with impact level and actual values
@@ -45,14 +46,23 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 - `calendar-find-event` — find specific event: FOMC, BOJ, CPI, NFP, GDP, PMI, BOE, RBA, etc.
 - `calendar-get-week` — full calendar for next 3 weeks grouped by day
 
+### Sentiment Tools (crypto only — Binance Futures pairs, free, no API key)
+- `sentiment-ls-ratio` — % Long vs Short all traders right now; high Long% (>65%) = crowded long = potential sell signal
+- `sentiment-top-traders` — positioning of institutional / smart money (top account holders on Binance Futures)
+- `sentiment-open-interest` — trend of open interest: new money entering or exiting a move
+- `sentiment-fear-greed` — overall crypto market sentiment index (0-100): Extreme Fear → contrarian buy; Extreme Greed → reversal risk
+
+> **Limitation:** Sentiment tools only work for Binance Futures pairs (BTCUSDT, ETHUSDT, SOLUSDT, etc.). Not applicable to Forex or Gold.
+
 ### Tool Routing (Technical Constraint — Not a Strategy Rule)
 - **Deriv MCP** → `frxXAUUSD`, `frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, all `frx*` pairs
 - **TradingView MCP** → `BINANCE:BTCUSDT`, `BINANCE:ETHUSDT`, `NASDAQ:AAPL`, `SP:SPX`, all crypto/stocks/indices
 - **Economic Calendar MCP** → all fundamental queries: "kapan CPI?", "ada event hari ini?", news risk check before entry
+- **Sentiment MCP** → crypto Binance Futures pairs only (BTCUSDT, ETHUSDT, SOLUSDT, etc.) — NOT for Forex/Gold
 
 ## Agent Toolkits
 
-- **MCP toolkit** — 6 servers, ~72 tools (data, indicators, calendar, DB monitoring)
+- **MCP toolkit** — 7 servers, ~76 tools (data, indicators, sentiment, calendar, DB monitoring)
 - **Search toolkit** — Web search via Tavily for real-time news and in-depth research
 - **Message toolkit** — `message-notify-user` (live progress), `message-ask-user` (clarification)
 
