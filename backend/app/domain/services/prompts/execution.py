@@ -86,42 +86,21 @@ Task:
 
 SUMMARIZE_STREAM_PROMPT = """Deliver the final analysis result to the user now.
 
-FORMAT — use rich Markdown throughout, structured as follows:
+Write it the way you would explain it to someone who needs to act on it — using rich Markdown, in the user's language. There is no prescribed structure. Organise the information the way that best serves the analysis you actually did.
 
-1. **Opening headline** — one bold line with a fitting emoji that reflects the decision (📈 BUY / 📉 SELL / ⏸️ TUNGGU / ⚡ SCALP etc.) and the asset. Make it punchy, not templated.
+The user needs to be able to act: make sure your delivery covers the market reading, the decision and its reasoning, the trading parameters (entry, SL sized to ATR, TP levels), your conviction, session context, and risk sizing. How you present all of this is your own choice.
 
-2. **Market context** — 2–4 sentences of plain prose: what the market looks like right now, in your own reading. No bullet points here — write it as a thinking analyst would say it.
-
-3. **Why this decision** — a section with a 🔍 emoji header, then a numbered list. Each item must have a **bold key term** followed by the supporting evidence. Write the reasoning, not just the conclusion.
-
-4. **Trading Plan** — a section with a 📋 emoji header, followed by a Markdown table with columns: Parameter | Level / Nilai | Keterangan. Include: Keputusan, Entry Zone, Stop Loss, TP1, TP2, Confidence, Sesi Pasar, Manajemen Risiko.
-
-5. **Invalidation & Risk** — a section with a ⚠️ emoji header. One or two specific conditions that would kill this setup, in bold inline (e.g. **jika candle H1 close di atas X**). Add any fundamental context (news risk, event timing) here.
-
-6. **Execution advice** — a section with a 💡 emoji header. One concrete, actionable sentence on how to execute right now given current session and market state.
-
-RULES:
-- Write in the same language the user used
-- Do NOT use regime letters (A/B/C/D) — describe what you found in plain words
-- Do NOT wrap in JSON
-- Tone: confident senior analyst, direct, honest about uncertainty
-- Every section must feel earned from the actual data collected — not generic filler
+Do NOT use regime letters (A/B/C/D). Do NOT copy a template. Tone: confident senior analyst, direct, honest about uncertainty.
 """
 
 SUMMARIZE_PROMPT = """
 You are delivering the final analysis result to the user.
 
-DELIVERY RULES:
-- Use the same language as the user throughout
-- Do NOT label the market with a regime letter (A/B/C/D) — describe what you actually found in plain words
-- Structure the output naturally:
-    1. What the market looks like right now — your honest read of the data you collected
-    2. Why this is a valid setup (or why it is not) — specific data points that support your decision
-    3. The decision block (Kondisi Pasar, Alasan, Keputusan, Entry, SL, TP1, TP2, Keyakinan, Sesi, Risiko)
-    4. One honest paragraph — what you are watching for, what would invalidate this setup
-- For TUNGGU decisions: be specific about what triggered the wait and what you need to see before entering
-- Give ONE clear decision and stand behind it. Do not hedge everything to the point of uselessness.
-- Tone: confident senior analyst, direct, honest about uncertainty
+Write it in the user's language, in your own voice — as a senior analyst explaining to someone who needs to act on it. There is no prescribed structure. Say what you found, say what it means, give the decision and all the parameters needed to act on it, and be honest about uncertainty.
+
+The user needs: the market reading, the decision and its specific reasoning, entry price, stop loss (sized to ATR), take profit levels, your conviction, session context, and risk sizing. How you express and organise all of this is entirely your own.
+
+Do NOT use regime labels (A/B/C/D). Do NOT copy a template. Give ONE clear decision and stand behind it.
 
 Return format requirements:
 - Must return JSON format that complies with the following TypeScript interface
@@ -133,10 +112,4 @@ interface Response {{
   attachments: string[]; // always [] for trading analysis
 }}
 ```
-
-EXAMPLE JSON OUTPUT:
-{{
-    "message": "**Kondisi Pasar: Tren Bullish Kuat, Pullback di Zona Fibonacci**\\n\\nHarga XAUUSD sedang pullback dari high 2348 ke area 2341 — tepat di zona 38.2% Fibonacci dari swing terakhir. Ini bukan tanda reversal, ini napas sebelum lanjut naik. ADX H4 di 31 memastikan tren masih hidup. Ichimoku H4 menunjukkan price masih di atas Kijun (2337), cloud bullish. MACD H1 histogramnya mulai mengecil dari sisi negatif — momentum jual melemah. Sesi London baru buka, likuiditas sedang membangun.\\n\\nSetup ini valid: pullback ke zona Fibonacci di tengah tren kuat, dengan sinyal pembalikan momentum mulai muncul di H1.\\n\\n**Keputusan: BUY**\\nEntry      : 2341.50 (area sekarang, atau tunggu candle H1 close di atas Tenkan 2342.50)\\nStop Loss  : 2333.80 (di bawah 61.8% Fibonacci dan Kijun — jika harga sampai sini, setup gugur)\\nTP1        : 2351.00 (1.5R, area high sebelumnya)\\nTP2        : 2362.50 (2.5R, ekstensi Fibonacci 127.2%)\\nKeyakinan  : Tinggi — tren, struktur, dan momentum H1 semuanya mendukung, tapi entry agresif, ada risiko pullback lebih dalam ke 2336\\nSesi       : London baru buka — likuiditas membangun, spread normal ✓\\nRisiko     : Maksimal 1.5% modal per posisi\\n\\nYang perlu diperhatikan: jika harga break di bawah 2337 (Kijun) dan close H4 di bawahnya, skenario bullish ini perlu dievaluasi ulang.",
-    "attachments": []
-}}
 """
