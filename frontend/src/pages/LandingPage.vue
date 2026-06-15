@@ -9,12 +9,12 @@
           <span class="nav-logo-text">Dzeck</span>
         </a>
         <div class="nav-right">
-          <button @click="toggleTheme" class="icon-btn" :title="theme === 'dark' ? 'Light mode' : 'Dark mode'">
+          <button @click="toggleTheme" class="icon-btn" :title="theme === 'dark' ? 'Mode Terang' : 'Mode Gelap'">
             <Sun v-if="theme === 'dark'" :size="16" />
             <Moon v-else :size="16" />
           </button>
-          <a href="/login" class="btn-secondary">Sign in</a>
-          <a href="/login" class="btn-primary">Sign up</a>
+          <a href="/login" class="btn-secondary">Masuk</a>
+          <a href="/login" class="btn-primary">Daftar</a>
         </div>
       </div>
     </nav>
@@ -22,8 +22,8 @@
     <!-- Main -->
     <main class="main">
       <div class="hero-section">
-        <h1 class="headline fade-up-1">Command your analytical edge.</h1>
-        <p class="sub-headline fade-up-2">Autonomous market intelligence. No fixed rules. Just adaptive reasoning across Forex, Crypto, Gold, and Stocks.</p>
+        <h1 class="headline fade-up-1">Kuasai analisis pasar Anda.</h1>
+        <p class="sub-headline fade-up-2">Kecerdasan pasar yang otonom. Tanpa aturan baku. Dzeck berpikir sendiri — layaknya analis profesional yang sadar — di Forex, Crypto, Gold, dan Saham.</p>
       </div>
 
       <!-- Input box -->
@@ -33,7 +33,7 @@
             ref="textareaRef"
             v-model="message"
             class="input-textarea"
-            placeholder="Command Dzeck to analyze a market or asset..."
+            placeholder="Perintahkan Dzeck untuk menganalisis pasar atau aset..."
             rows="1"
             @focus="isFocused = true"
             @blur="isFocused = false"
@@ -41,14 +41,14 @@
             @keydown.enter.exact.prevent="handleSend"
           />
           <div class="input-actions">
-            <button class="attach-btn" title="Attach context">
+            <button class="attach-btn" title="Lampirkan konteks">
               <Plus :size="18" />
             </button>
             <button
               class="send-btn"
               :class="{ active: message.trim().length > 0 }"
               @click="handleSend"
-              title="Send Command"
+              title="Kirim"
             >
               <ArrowUp :size="16" />
             </button>
@@ -70,6 +70,73 @@
       </div>
     </main>
 
+    <!-- How It Works -->
+    <section class="how-section">
+      <div class="how-inner">
+        <div class="how-header fade-up-5">
+          <span class="how-label">Cara Kerja</span>
+          <h2 class="how-title">Berpikir seperti trader profesional</h2>
+          <p class="how-desc">Dzeck tidak mengikuti skrip. Setiap analisis dimulai dari nol — membaca kondisi pasar aktual, memilih pendekatan yang tepat, lalu menyampaikan keputusan yang jelas dan jujur.</p>
+        </div>
+
+        <div class="steps-grid">
+          <div class="step fade-up-5" style="transition-delay: 0.1s">
+            <div class="step-number">01</div>
+            <div class="step-icon-wrap">
+              <Search :size="20" />
+            </div>
+            <h3 class="step-title">Membaca pasar dari nol</h3>
+            <p class="step-desc">Dzeck mulai dengan membaca kondisi pasar saat ini — sesi aktif, harga terkini, volatilitas, dan apakah ada arah yang jelas. Tidak ada asumsi sebelumnya.</p>
+          </div>
+
+          <div class="step fade-up-5" style="transition-delay: 0.2s">
+            <div class="step-number">02</div>
+            <div class="step-icon-wrap">
+              <Brain :size="20" />
+            </div>
+            <h3 class="step-title">Memilih indikator sendiri</h3>
+            <p class="step-desc">Berdasarkan apa yang ditemukan, Dzeck memutuskan sendiri indikator mana yang relevan dan parameter apa yang tepat untuk kondisi pasar saat ini — bukan dari daftar baku.</p>
+          </div>
+
+          <div class="step fade-up-5" style="transition-delay: 0.3s">
+            <div class="step-number">03</div>
+            <div class="step-icon-wrap">
+              <MessageSquare :size="20" />
+            </div>
+            <h3 class="step-title">Menjelaskan setiap langkah</h3>
+            <p class="step-desc">Sebelum memanggil tool apapun, Dzeck menjelaskan kenapa. Setelah membaca data, Dzeck menjelaskan apa artinya. Proses berpikirnya transparan dan dapat diikuti.</p>
+          </div>
+
+          <div class="step fade-up-5" style="transition-delay: 0.4s">
+            <div class="step-number">04</div>
+            <div class="step-icon-wrap">
+              <CheckCircle :size="20" />
+            </div>
+            <h3 class="step-title">Keputusan yang tegas dan jujur</h3>
+            <p class="step-desc">BUY, SELL, atau TUNGGU — dengan entry, stop loss berbasis ATR, target profit, dan tingkat keyakinan yang jujur. Bukan template. Bukan label. Keputusan sungguhan.</p>
+          </div>
+        </div>
+
+        <div class="markets-row fade-up-5" style="transition-delay: 0.5s">
+          <span class="markets-label">Mendukung</span>
+          <div class="markets-chips">
+            <span class="market-chip"><TrendingUp :size="13" /> Forex</span>
+            <span class="market-chip"><BarChart2 :size="13" /> Gold (XAUUSD)</span>
+            <span class="market-chip"><Zap :size="13" /> Crypto</span>
+            <span class="market-chip"><Globe :size="13" /> Saham & Indeks</span>
+            <span class="market-chip"><Calendar :size="13" /> Kalender Ekonomi</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="footer-brand">Dzeck</span>
+      <span class="footer-sep">·</span>
+      <span class="footer-copy">Analis trading otonom berbasis AI</span>
+    </footer>
+
   </div>
 </template>
 
@@ -77,8 +144,9 @@
 import { ref, nextTick, markRaw, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Bot, Sun, Moon, Plus, ArrowUp, X,
-  TrendingUp, TrendingDown, BarChart2, Activity, Search, Globe, Clock, Calendar, Zap, Target
+  Bot, Sun, Moon, Plus, ArrowUp,
+  TrendingUp, BarChart2, Activity, Globe, Calendar, Zap, Target,
+  Search, MessageSquare, CheckCircle, Brain
 } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
 
@@ -148,7 +216,7 @@ const handleSend = () => {
 }
 
 /* Animations */
-.fade-up-1, .fade-up-2, .fade-up-3, .fade-up-4 {
+.fade-up-1, .fade-up-2, .fade-up-3, .fade-up-4, .fade-up-5 {
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
@@ -158,6 +226,7 @@ const handleSend = () => {
 .is-loaded .fade-up-2 { opacity: 1; transform: translateY(0); transition-delay: 0.2s; }
 .is-loaded .fade-up-3 { opacity: 1; transform: translateY(0); transition-delay: 0.3s; }
 .is-loaded .fade-up-4 { opacity: 1; transform: translateY(0); transition-delay: 0.4s; }
+.is-loaded .fade-up-5 { opacity: 1; transform: translateY(0); }
 
 /* ── Navbar ── */
 .nav {
@@ -184,9 +253,7 @@ const handleSend = () => {
   color: var(--text-primary);
   transition: opacity 0.2s;
 }
-.nav-logo:hover {
-  opacity: 0.8;
-}
+.nav-logo:hover { opacity: 0.8; }
 .nav-logo-text {
   font-size: 16px;
   font-weight: 600;
@@ -229,7 +296,7 @@ const handleSend = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px 120px;
+  padding: 60px 20px 80px;
   position: relative;
 }
 
@@ -249,10 +316,10 @@ const handleSend = () => {
 }
 
 .sub-headline {
-  font-size: clamp(15px, 2vw, 18px);
+  font-size: clamp(15px, 2vw, 17px);
   font-weight: 400;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 0 auto;
   max-width: 560px;
 }
@@ -328,18 +395,191 @@ const handleSend = () => {
   font-size: 13px; font-weight: 500; cursor: pointer;
   transition: all 0.2s;
 }
-.pill-icon {
-  color: var(--text-tertiary);
-  transition: color 0.2s;
-}
+.pill-icon { color: var(--text-tertiary); transition: color 0.2s; }
 .suggestion-pill:hover { background: var(--background-gray-main); color: var(--text-primary); border-color: var(--text-tertiary); }
 .suggestion-pill:hover .pill-icon { color: var(--text-primary); }
 
+/* ── How It Works ── */
+.how-section {
+  background: var(--background-card);
+  border-top: 1px solid var(--border-main);
+  padding: 80px 20px;
+}
+
+.how-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.how-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.how-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 14px;
+  border: 1px solid var(--border-btn-main);
+  padding: 4px 12px;
+  border-radius: 99px;
+}
+
+.how-title {
+  font-size: clamp(22px, 3.5vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+  line-height: 1.2;
+}
+
+.how-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* Steps grid */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  border: 1px solid var(--border-main);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 40px;
+}
+
+.step {
+  padding: 32px 24px;
+  background: var(--background-gray-main);
+  position: relative;
+  transition: background 0.2s;
+}
+.step:hover { background: var(--fill-tsp-white-main); }
+
+.step-number {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-disable);
+  margin-bottom: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.step-icon-wrap {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-btn-main);
+  background: var(--background-card);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.step-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Markets row */
+.markets-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.markets-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.markets-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.market-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-btn-main);
+  background: var(--background-gray-main);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── Footer ── */
+.footer {
+  border-top: 1px solid var(--border-main);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.footer-brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.footer-sep {
+  color: var(--text-disable);
+  font-size: 13px;
+}
+
+.footer-copy {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
 /* ── Responsive ── */
+@media (max-width: 768px) {
+  .steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .how-section { padding: 60px 16px; }
+}
+
 @media (max-width: 600px) {
   .headline { font-size: 28px; }
   .nav-right .btn-secondary { display: none; }
-  .main { padding: 40px 16px 80px; }
+  .main { padding: 40px 16px 60px; }
   .suggestion-pill { font-size: 12px; padding: 7px 12px; }
+  .steps-grid { grid-template-columns: 1fr; }
+  .step { padding: 24px 20px; }
+  .markets-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .how-header { margin-bottom: 36px; }
 }
 </style>
