@@ -56,20 +56,23 @@ echo ""
 echo "[2/5] Installing core backend dependencies..."
 
 python3 -m pip install $PIP_FLAGS -q \
-  "fastapi>=0.121.2" \
-  "uvicorn>=0.38.0" \
+  "async-lru>=2.0.0" \
   "beanie>=1.25.0" \
-  "redis>=5.0.1" \
+  "cryptography>=3.4.8" \
+  "email-validator>=2.3.0" \
+  "fastapi>=0.121.2" \
+  "httpx>=0.28.1" \
   "pydantic>=2.12.4" \
   "pydantic-settings>=2.12.0" \
-  "email-validator>=2.3.0" \
-  "python-dotenv>=1.2.1" \
-  "python-multipart>=0.0.20" \
   "pyjwt[crypto]>=2.8.0" \
   "pymongo>=4.14.0" \
+  "python-dotenv>=1.2.1" \
+  "python-multipart>=0.0.20" \
+  "redis>=5.0.1" \
+  "rich>=14.2.0" \
   "sse-starlette>=3.0.3" \
-  "httpx>=0.28.1" \
-  "cryptography>=3.4.8"
+  "uvicorn>=0.38.0" \
+  "websockets>=15.0.1"
 
 echo "      Core dependencies installed"
 
@@ -79,26 +82,29 @@ echo "[3/5] Installing AI/LLM dependencies..."
 
 # 3a. OpenAI client
 python3 -m pip install $PIP_FLAGS -q \
-  "openai>=1.58.1,<3.0.0"
+  "openai>=2.8.0"
 
-# 3b. LangChain ecosystem
+# 3b. LangChain ecosystem + all provider adapters
 python3 -m pip install $PIP_FLAGS -q \
-  "langchain>=0.3.0" \
-  "langchain-core>=0.3.0" \
-  "langchain-openai>=0.3.0"
+  "langchain>=1.0.7" \
+  "langchain-classic>=1.0.7" \
+  "langchain-openai>=1.0.3" \
+  "langchain-anthropic>=1.2.0" \
+  "langchain-deepseek>=1.0.1" \
+  "langchain-ollama>=1.0.0"
+
+# 3c. Search
+python3 -m pip install $PIP_FLAGS -q \
+  "tavily-python>=0.5.0"
 
 echo "      AI/LLM dependencies installed"
 
-# ── 4. Utility dependencies ───────────────────────────────────────────────────
+# ── 4. Utility + MCP dependencies ────────────────────────────────────────────
 echo ""
 echo "[4/5] Installing utility dependencies..."
 
 python3 -m pip install $PIP_FLAGS -q \
-  "curl-cffi>=0.14.0" \
-  "beautifulsoup4>=4.12.0" \
-  "tavily-python>=0.5.0" \
-  "mcp>=1.9.0" \
-  "debugpy>=1.8.17"
+  "mcp>=1.9.0"
 
 # ── 4a. MCP server dependencies ───────────────────────────────────────────────
 echo "      Installing MCP server dependencies..."
@@ -145,9 +151,10 @@ if [ ! -f backend/.env ]; then
     echo "      Edit backend/.env and fill in your API keys before starting"
   else
     echo "      WARNING: No .env.example found — create backend/.env with your config"
-    echo "      Required: API_KEY, API_BASE, MODEL_NAME"
+    echo "      Required: API_KEY, API_BASE, MODEL_NAME, MODEL_PROVIDER"
     echo "      Required: MONGODB_URI, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD"
-    echo "      Optional: TAVILY_API_KEY, JWT_SECRET_KEY"
+    echo "      Required: JWT_SECRET_KEY, PASSWORD_SALT, AUTH_PROVIDER"
+    echo "      Optional: TAVILY_API_KEY, TV_PROXY_BASE, VISION_MODEL_NAME"
   fi
 else
   echo "      backend/.env already exists"

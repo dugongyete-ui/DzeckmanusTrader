@@ -2,10 +2,6 @@ from typing import Optional, AsyncGenerator, List
 import asyncio
 import logging
 import os
-try:
-    import debugpy
-except ImportError:
-    debugpy = None
 from pydantic import TypeAdapter
 from app.domain.models.message import Message, VisionImage, is_vision_capable
 from app.domain.services import file_extractor
@@ -233,9 +229,6 @@ class AgentTaskRunner(TaskRunner):
             await self._session_repository.update_status(self._session_id, SessionStatus.COMPLETED)
         except Exception as e:
             logger.exception(f"Agent {self._agent_id} task encountered exception: {str(e)}")
-
-            if debugpy and (debugpy.is_client_connected() or os.getenv('ENABLE_DEBUG_BREAK')):
-                debugpy.breakpoint()
 
             error_event = ErrorEvent(error=str(e))
             await self._put_and_add_event(task, error_event)
