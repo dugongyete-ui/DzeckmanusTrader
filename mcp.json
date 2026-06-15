@@ -40,7 +40,7 @@
       "args": ["/home/runner/workspace/mcp-servers/economic-calendar/server.py"],
       "transport": "stdio",
       "enabled": true,
-      "description": "Economic Calendar MCP — real-time calendar: CPI, FOMC, NFP, GDP, PMI, rate decisions and all major economic events with forecast/actual/previous values. Source: ForexFactory (free, no API key)."
+      "description": "Economic Calendar MCP — real-time calendar: CPI, FOMC, NFP, GDP, PMI, BOJ, BOE, RBA and all major economic events with forecast/actual/previous values and countdown timers. Source: TradingView Economic Calendar API (60-min disk cache)."
     }
   }
 }
