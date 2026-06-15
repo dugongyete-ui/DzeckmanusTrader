@@ -154,6 +154,26 @@ class Memory(BaseModel):
                 message.content = text_parts[0]["text"] if (len(text_parts) == 1) else (text_parts if text_parts else "(screenshot removed)")
                 logger.debug(f"Stripped browser screenshot from ToolMessage at index {i}")
 
+        # --- Pass 4: truncate large non-browser ToolMessage results ---
+        # MCP/market-data tool results can be very large. After a step completes,
+        # keep only the last _MAX_TOOL_RESULT_CHARS characters of each result so
+        # that accumulated step context does not flood subsequent steps and cause
+        # the model to skip tool calls in favour of "known" data.
+        _MAX_TOOL_RESULT_CHARS = 3000
+        for i, message in enumerate(self.messages):
+            if message.type != "tool":
+                continue
+            if message.name in self._BROWSER_TOOLS_TO_COMPACT:
+                continue
+            if not isinstance(message.content, str):
+                continue
+            if len(message.content) > _MAX_TOOL_RESULT_CHARS:
+                message.content = message.content[-_MAX_TOOL_RESULT_CHARS:]
+                logger.debug(
+                    f"Truncated large tool result in memory: {message.name} at index {i} "
+                    f"to last {_MAX_TOOL_RESULT_CHARS} chars"
+                )
+
     @property
     def empty(self) -> bool:
         """Check if memory is empty"""
