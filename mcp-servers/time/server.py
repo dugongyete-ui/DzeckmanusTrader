@@ -79,7 +79,7 @@ def forex_market_status() -> dict:
 async def list_tools() -> list[Tool]:
     return [
         Tool(
-            name="get_current_time",
+            name="get-current-time",
             description=(
                 "Get the current date and time in one or more timezones. "
                 "Supports: WIB, WITA, WIT, UTC, SGT, MYT, EST, GMT, JST, AEST, "
@@ -98,7 +98,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="forex_market_hours",
+            name="forex-market-hours",
             description=(
                 "Check which forex market sessions are currently open — "
                 "Sydney, Tokyo, London, New York. "
@@ -110,7 +110,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="convert_timezone",
+            name="convert-timezone",
             description="Convert a specific time from one timezone to another.",
             inputSchema={
                 "type": "object",
@@ -135,7 +135,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="time_until_market_open",
+            name="time-until-market-open",
             description=(
                 "Calculate how long until a specific forex session opens. "
                 "Useful for knowing when London or New York opens from your local time."
@@ -160,7 +160,7 @@ async def list_tools() -> list[Tool]:
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     try:
-        if name == "get_current_time":
+        if name == "get-current-time":
             tzs = arguments.get("timezones", ["WIB", "UTC", "GMT", "EST"])
             now_utc = get_utc_now()
             lines = [f"🕐 Current Time\n"]
@@ -173,7 +173,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     lines.append(f"{tz_code:<8} Invalid timezone")
             text = "\n".join(lines)
 
-        elif name == "forex_market_hours":
+        elif name == "forex-market-hours":
             now_utc = get_utc_now()
             status = forex_market_status()
             lines = [f"🌍 Forex Market Status — {now_utc.strftime('%Y-%m-%d %H:%M UTC')}\n"]
@@ -203,7 +203,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             text = "\n".join(lines)
 
-        elif name == "convert_timezone":
+        elif name == "convert-timezone":
             time_str = arguments["time"].strip()
             from_code = arguments["from_tz"]
             to_code = arguments["to_tz"]
@@ -241,7 +241,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 f"({from_iana} → {to_iana})"
             )
 
-        elif name == "time_until_market_open":
+        elif name == "time-until-market-open":
             raw_session = arguments["session"].strip()
             # Normalise to Title Case and support "new york" → "New York"
             SESSION_ALIASES = {

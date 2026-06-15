@@ -81,7 +81,7 @@ Every market analysis request mandatorily goes through four phases. This is enfo
 ```
 Phase 0 — SCAN
   Read raw market state: session activity, current price, ATR (volatility), ADX (trend strength)
-  Tools: forex_market_hours → deriv_market_snapshot → deriv_atr → deriv_technical_analysis
+  Tools: forex-market-hours → deriv-market-snapshot → deriv-atr → deriv-technical-analysis
          (or coin_analysis for TradingView assets)
 
 Phase 1 — DIAGNOSE
@@ -95,9 +95,9 @@ Phase 1 — DIAGNOSE
 
 Phase 2 — SELF-CONFIGURE
   Choose indicator set and parameters appropriate for the diagnosed regime:
-  Regime A → trend-following  : deriv_smart_analysis + deriv_macd + deriv_ema(50/200)
-  Regime B → confirmation     : deriv_smart_analysis + deriv_rsi + deriv_bbands
-  Regime C → mean-reversion   : deriv_stoch + deriv_rsi + deriv_bbands + S/R levels
+  Regime A → trend-following  : deriv-smart-analysis + deriv-macd + deriv-ema(50/200)
+  Regime B → confirmation     : deriv-smart-analysis + deriv-rsi + deriv-bbands
+  Regime C → mean-reversion   : deriv-stoch + deriv-rsi + deriv-bbands + S/R levels
   Regime D → standby          : notify user, do NOT run entry analysis
 
 Phase 3 — DECIDE
@@ -110,15 +110,15 @@ Phase 3 — DECIDE
 | Toolkit | Tools | Purpose |
 |---|---|---|
 | **MCP toolkit** | All tools from `mcp.json` | Market data, indicators, DB persistence, time/session |
-| **Search toolkit** | `info_search_web` | Economic calendar, news, fundamental events via Tavily |
-| **Message toolkit** | `message_notify_user`, `message_ask_user` | Live progress updates + user clarification |
+| **Search toolkit** | `info-search-web` | Economic calendar, news, fundamental events via Tavily |
+| **Message toolkit** | `message-notify-user`, `message-ask-user` | Live progress updates + user clarification |
 
 ### MCP Servers (`mcp.json`)
 
 | Server | Key Tools | Instruments |
 |---|---|---|
-| `time` | `forex_market_hours` | All — session/time checks |
-| `deriv` | `deriv_smart_analysis`, `deriv_rsi`, `deriv_macd`, `deriv_bbands`, `deriv_ema`, `deriv_atr`, `deriv_stoch`, `deriv_technical_analysis` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
+| `time` | `forex-market-hours` | All — session/time checks |
+| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
 | `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_breakout_scanner`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
 | `mongodb` | find, aggregate, count | Signal storage and history |
 | `redis` | get/set, stats | Real-time data cache |

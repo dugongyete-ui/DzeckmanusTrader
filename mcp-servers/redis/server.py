@@ -44,12 +44,12 @@ def get_client():
 async def list_tools() -> list[Tool]:
     return [
         Tool(
-            name="redis_info",
+            name="redis-info",
             description="Get Redis server info — memory, clients, stats, uptime.",
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
-            name="redis_keys",
+            name="redis-keys",
             description=(
                 "List Redis keys matching a pattern. "
                 "Use '*' for all keys, 'session:*' for sessions, 'task:*' for tasks, etc."
@@ -71,7 +71,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="redis_get",
+            name="redis-get",
             description="Get the value of a Redis key. Auto-detects type (string, hash, list, set).",
             inputSchema={
                 "type": "object",
@@ -85,7 +85,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="redis_delete",
+            name="redis-delete",
             description="Delete one or more Redis keys.",
             inputSchema={
                 "type": "object",
@@ -100,7 +100,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="redis_stats",
+            name="redis-stats",
             description=(
                 "Get overview stats — total keys, memory usage, connected clients, "
                 "active sessions, task queues. Good for monitoring the project's Redis usage."
@@ -108,7 +108,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
-            name="redis_flush_pattern",
+            name="redis-flush-pattern",
             description=(
                 "Delete all keys matching a pattern. "
                 "Use with caution — e.g. 'cache:*' to clear all cache entries."
@@ -132,7 +132,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     try:
         r = get_client()
 
-        if name == "redis_info":
+        if name == "redis-info":
             info = r.info()
             lines = ["📊 Redis Server Info\n"]
             important = [
@@ -157,7 +157,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
             text = "\n".join(lines)
 
-        elif name == "redis_keys":
+        elif name == "redis-keys":
             pattern = arguments.get("pattern", "*")
             limit = min(arguments.get("limit", 50), 200)
 
@@ -177,7 +177,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
             text = "\n".join(lines)
 
-        elif name == "redis_get":
+        elif name == "redis-get":
             key = arguments["key"]
             ktype = r.type(key)
 
@@ -212,12 +212,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 text = f"Key '{key}' type '{ktype}' not supported for display"
 
-        elif name == "redis_delete":
+        elif name == "redis-delete":
             keys = arguments["keys"]
             deleted = r.delete(*keys)
             text = f"🗑️  Deleted {deleted}/{len(keys)} key(s):\n" + "\n".join(f"  - {k}" for k in keys)
 
-        elif name == "redis_stats":
+        elif name == "redis-stats":
             info = r.info()
             total_keys = sum(
                 db_info.get("keys", 0)
@@ -244,7 +244,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             ]
             text = "\n".join(lines)
 
-        elif name == "redis_flush_pattern":
+        elif name == "redis-flush-pattern":
             pattern = arguments["pattern"]
             keys = list(r.scan_iter(pattern, count=200))
             if not keys:

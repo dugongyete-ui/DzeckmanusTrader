@@ -75,7 +75,7 @@ EXAMPLE JSON OUTPUT (market analysis request):
     "steps": [
         {{
             "id": "1",
-            "description": "Scan pasar XAUUSD — cek sesi aktif (forex_market_hours), harga terkini (deriv_market_snapshot), volatilitas ATR H1, dan kekuatan trend ADX H4"
+            "description": "Scan pasar XAUUSD — cek sesi aktif (forex-market-hours), harga terkini (deriv-market-snapshot), volatilitas ATR H1, dan kekuatan trend ADX H4"
         }},
         {{
             "id": "2",
@@ -133,7 +133,7 @@ EXAMPLE JSON OUTPUT:
     "steps": [
         {{
             "id": "2",
-            "description": "Regime A terkonfirmasi (ADX=31, trending up). Jalankan deriv_smart_analysis untuk analisis multi-timeframe penuh, lalu konfirmasi dengan deriv_macd dan deriv_ema periode 50 dan 200"
+            "description": "Regime A terkonfirmasi (ADX=31, trending up). Jalankan deriv-smart-analysis untuk analisis multi-timeframe penuh, lalu konfirmasi dengan deriv-macd dan deriv-ema periode 50 dan 200"
         }},
         {{
             "id": "3",

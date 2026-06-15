@@ -53,7 +53,7 @@ def serialize(obj):
 async def list_tools() -> list[Tool]:
     return [
         Tool(
-            name="mongo_list_collections",
+            name="mongo-list-collections",
             description="List all collections in the MongoDB database.",
             inputSchema={
                 "type": "object",
@@ -66,7 +66,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="mongo_find",
+            name="mongo-find",
             description=(
                 "Query documents from a MongoDB collection. "
                 "Supports filter, projection, sort, and limit. "
@@ -108,7 +108,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="mongo_count",
+            name="mongo-count",
             description="Count documents in a collection matching a filter.",
             inputSchema={
                 "type": "object",
@@ -121,7 +121,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="mongo_aggregate",
+            name="mongo-aggregate",
             description=(
                 "Run a MongoDB aggregation pipeline. "
                 "Use for complex analytics, grouping, and statistics."
@@ -141,7 +141,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="mongo_stats",
+            name="mongo-stats",
             description="Get database and collection statistics — sizes, document counts, indexes.",
             inputSchema={
                 "type": "object",
@@ -168,7 +168,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     try:
         db = get_db(arguments.get("database", ""))
 
-        if name == "mongo_list_collections":
+        if name == "mongo-list-collections":
             collections = db.list_collection_names()
             lines = [f"📂 Collections in '{db.name}' ({len(collections)} total)\n"]
             for col in sorted(collections):
@@ -176,7 +176,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 lines.append(f"  {col:<30} {count:>8} documents")
             text = "\n".join(lines)
 
-        elif name == "mongo_find":
+        elif name == "mongo-find":
             col = db[arguments["collection"]]
             filter_q = arguments.get("filter", {})
             projection = arguments.get("projection", {}) or None
@@ -194,12 +194,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 + json.dumps(docs, indent=2, ensure_ascii=False)
             )
 
-        elif name == "mongo_count":
+        elif name == "mongo-count":
             col = db[arguments["collection"]]
             count = col.count_documents(arguments.get("filter", {}))
             text = f"📊 {arguments['collection']}: {count} document(s) match the filter"
 
-        elif name == "mongo_aggregate":
+        elif name == "mongo-aggregate":
             col = db[arguments["collection"]]
             results = [serialize(d) for d in col.aggregate(arguments["pipeline"])]
             text = (
@@ -207,7 +207,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 + json.dumps(results, indent=2, ensure_ascii=False)
             )
 
-        elif name == "mongo_stats":
+        elif name == "mongo-stats":
             lines = [f"📊 MongoDB Stats — '{db.name}'\n"]
             for col_name in sorted(db.list_collection_names()):
                 col = db[col_name]

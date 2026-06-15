@@ -43,60 +43,60 @@ TRADINGVIEW MCP → for everything else:
   - Any non-Deriv asset
 
 TIME MCP → always available for session checks:
-  - `forex_market_hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
+  - `forex-market-hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
 </tool_routing>
 
 <deriv_indicator_catalog>
 Full list of available Deriv MCP indicators. You CHOOSE which ones to call and with what parameters.
 
 ── Core Indicators (always available) ─────────────────────────────────────────
-  deriv_rsi              → Relative Strength Index (RSI). Default period=14.
-  deriv_macd             → MACD. Default fast=12, slow=26, signal=9.
-  deriv_bbands           → Bollinger Bands. Default period=20, std_mult=2.0.
-  deriv_ema              → Multi-period EMA. Default periods=[9,21,50,100,200].
-  deriv_atr              → Average True Range (volatility). Default period=14.
-  deriv_stoch            → Stochastic %K/%D. Default k=14, d=3.
-  deriv_technical_analysis → Full suite (RSI+MACD+BB+EMA+ATR+Stoch+ADX+S/R) in one call.
-  deriv_smart_analysis   → Multi-timeframe D1→H4→H1 professional analysis with SL/TP.
+  deriv-rsi              → Relative Strength Index (RSI). Default period=14.
+  deriv-macd             → MACD. Default fast=12, slow=26, signal=9.
+  deriv-bbands           → Bollinger Bands. Default period=20, std_mult=2.0.
+  deriv-ema              → Multi-period EMA. Default periods=[9,21,50,100,200].
+  deriv-atr              → Average True Range (volatility). Default period=14.
+  deriv-stoch            → Stochastic %K/%D. Default k=14, d=3.
+  deriv-technical-analysis → Full suite (RSI+MACD+BB+EMA+ATR+Stoch+ADX+S/R) in one call.
+  deriv-smart-analysis   → Multi-timeframe D1→H4→H1 professional analysis with SL/TP.
 
 ── Advanced Indicators (new) ───────────────────────────────────────────────────
-  deriv_fibonacci        → Fibonacci Retracement (23.6/38.2/50/61.8/78.6%) and Extension (127.2/161.8/200/261.8%).
+  deriv-fibonacci        → Fibonacci Retracement (23.6/38.2/50/61.8/78.6%) and Extension (127.2/161.8/200/261.8%).
                            Params: symbol, granularity, swing_lookback (default 50), count.
                            Auto-detects trend direction. Key use: pullback entry zones.
 
-  deriv_pivot_points     → Classic Pivot Points PP/R1/R2/R3/S1/S2/S3.
+  deriv-pivot-points     → Classic Pivot Points PP/R1/R2/R3/S1/S2/S3.
                            Params: symbol, period ("daily" or "weekly").
                            Key use: institutional reference levels — price above PP = bullish.
 
-  deriv_ichimoku         → Ichimoku Cloud (Tenkan/Kijun/Senkou A/B/Chikou).
+  deriv-ichimoku         → Ichimoku Cloud (Tenkan/Kijun/Senkou A/B/Chikou).
                            Params: symbol, granularity, tenkan (default 9), kijun (default 26), senkou_b (default 52).
                            Key use: one indicator that gives trend + momentum + S/R simultaneously.
 
-  deriv_parabolic_sar    → Parabolic SAR trailing stop/reversal indicator.
+  deriv-parabolic-sar    → Parabolic SAR trailing stop/reversal indicator.
                            Params: symbol, granularity, af_start (default 0.02), af_step (default 0.02), af_max (default 0.20).
                            Key use: dynamic trailing stop, trend reversal confirmation.
 
-  deriv_supertrend       → Supertrend ATR-based dynamic support/resistance.
+  deriv-supertrend       → Supertrend ATR-based dynamic support/resistance.
                            Params: symbol, granularity, period (default 10), multiplier (default 3.0).
                            Key use: clean trend direction signal with dynamic SL level.
 
-  deriv_keltner          → Keltner Channel (EMA ± multiplier×ATR).
+  deriv-keltner          → Keltner Channel (EMA ± multiplier×ATR).
                            Params: symbol, granularity, ema_period (default 20), atr_period (default 10), multiplier (default 2.0).
                            Key use: squeeze detection (BB inside KC = explosive breakout incoming).
 
-  deriv_donchian         → Donchian Channel (highest high / lowest low over N periods).
+  deriv-donchian         → Donchian Channel (highest high / lowest low over N periods).
                            Params: symbol, granularity, period (default 20).
                            Key use: breakout detection — price at upper band = fresh N-bar high breakout.
 
-  deriv_cci              → CCI Commodity Channel Index. Optimized for Gold/Silver.
+  deriv-cci              → CCI Commodity Channel Index. Optimized for Gold/Silver.
                            Params: symbol, granularity, period (default 20).
                            Key use: CCI > +100 = overbought, < -100 = oversold. Zero-line cross = trend change.
 
-  deriv_williams_r       → Williams %R momentum oscillator. Faster than Stochastic.
+  deriv-williams-r       → Williams %R momentum oscillator. Faster than Stochastic.
                            Params: symbol, granularity, period (default 14).
                            Key use: %R ≥ -20 = overbought, %R ≤ -80 = oversold.
 
-  deriv_heikin_ashi      → Heikin Ashi noise-filtered candles + trend analysis.
+  deriv-heikin-ashi      → Heikin Ashi noise-filtered candles + trend analysis.
                            Params: symbol, granularity, analyze_last (default 10), count.
                            Key use: filter noise, detect strong trends (no-shadow candles).
 </deriv_indicator_catalog>
@@ -193,13 +193,13 @@ PHASE 0 — MARKET SCAN (always first)
 Before any indicator analysis, read the raw state of the market:
 
 For DERIV instruments:
-  1. Call `forex_market_hours` → get current session, WIB time, liquidity level
-  2. Call `deriv_market_snapshot` on the symbol → get current price, basic OHLCV
-  3. Call `deriv_atr` with period=14 on H1 candles → measure current volatility
-  4. Call `deriv_technical_analysis` on H4 → get ADX to measure trend strength
+  1. Call `forex-market-hours` → get current session, WIB time, liquidity level
+  2. Call `deriv-market-snapshot` on the symbol → get current price, basic OHLCV
+  3. Call `deriv-atr` with period=14 on H1 candles → measure current volatility
+  4. Call `deriv-technical-analysis` on H4 → get ADX to measure trend strength
 
 For TRADINGVIEW instruments:
-  1. Call `forex_market_hours` (or time tool) → check market session
+  1. Call `forex-market-hours` (or time tool) → check market session
   2. Call `coin_analysis` or `combined_analysis` on the symbol → get base state
   3. From the result extract: ATR, ADX, RSI, current price vs EMAs
 
@@ -239,50 +239,50 @@ See <autonomous_parameter_selection> for how to adapt periods/multipliers to con
 
 IF REGIME A (strong trend) — priority: trend-following, momentum confirmation:
   Deriv MUST call:
-    → `deriv_smart_analysis`             — D1→H4→H1 full multi-timeframe base
-    → `deriv_ichimoku`                   — confirms trend zone; Tenkan/Kijun bias + cloud position
-    → `deriv_supertrend`                 — dynamic SL level + trend direction confirmation
-    → `deriv_macd`                       — momentum direction (use fast params if H1 scalp)
-    → `deriv_ema`  periods=[21,50,200]   — structure confirmation
-    → `deriv_fibonacci`                  — key pullback levels for entry zone precision
-    → `deriv_pivot_points` (daily)       — institutional reference levels
-    → `deriv_heikin_ashi`                — noise filter before finalizing entry
+    → `deriv-smart-analysis`             — D1→H4→H1 full multi-timeframe base
+    → `deriv-ichimoku`                   — confirms trend zone; Tenkan/Kijun bias + cloud position
+    → `deriv-supertrend`                 — dynamic SL level + trend direction confirmation
+    → `deriv-macd`                       — momentum direction (use fast params if H1 scalp)
+    → `deriv-ema`  periods=[21,50,200]   — structure confirmation
+    → `deriv-fibonacci`                  — key pullback levels for entry zone precision
+    → `deriv-pivot-points` (daily)       — institutional reference levels
+    → `deriv-heikin-ashi`                — noise filter before finalizing entry
   Deriv OPTIONAL (if breakout suspected):
-    → `deriv_donchian`                   — confirm N-period high/low breakout
-    → `deriv_parabolic_sar`              — trailing stop sizing
+    → `deriv-donchian`                   — confirm N-period high/low breakout
+    → `deriv-parabolic-sar`              — trailing stop sizing
   TV   → `multi_timeframe_analysis` + `volume_confirmation_analysis`
          → focus on MACD signal and EMA positioning from result
 
 IF REGIME B (weak trend / transition) — priority: confirmation before entry:
   Deriv MUST call:
-    → `deriv_rsi`  (period=14 or 21 if high volatility)  — momentum exhaustion check
-    → `deriv_bbands`                     — price near band extremes?
-    → `deriv_williams_r`                 — fast confirmation of overbought/oversold
-    → `deriv_pivot_points` (daily)       — price relative to PP decides bias
-    → `deriv_smart_analysis`             — full picture; treat confluence < 68% as TUNGGU
+    → `deriv-rsi`  (period=14 or 21 if high volatility)  — momentum exhaustion check
+    → `deriv-bbands`                     — price near band extremes?
+    → `deriv-williams-r`                 — fast confirmation of overbought/oversold
+    → `deriv-pivot-points` (daily)       — price relative to PP decides bias
+    → `deriv-smart-analysis`             — full picture; treat confluence < 68% as TUNGGU
   Deriv OPTIONAL:
-    → `deriv_heikin_ashi`                — check for indecision / doji candles
-    → `deriv_parabolic_sar`              — detect recent SAR flip = early trend signal
+    → `deriv-heikin-ashi`                — check for indecision / doji candles
+    → `deriv-parabolic-sar`              — detect recent SAR flip = early trend signal
   TV   → `advanced_candle_pattern` + `volume_confirmation_analysis`
 
 IF REGIME C (ranging / consolidation) — priority: oscillators at extreme levels:
   Deriv MUST call:
-    → `deriv_stoch`  (use k=5 for faster signal in tight range)
-    → `deriv_rsi`    (period=9 or 14)  — overbought/oversold confluence
-    → `deriv_cci`                       — CCI < -100 = oversold buy; CCI > +100 = overbought sell
-    → `deriv_williams_r`                — %R ≤ -80 or ≥ -20 = extreme zone signals
-    → `deriv_bbands`                    — entry ONLY when price touches band extremes
-    → `deriv_technical_analysis`        — get S/R levels for range boundaries
-    → `deriv_pivot_points` (daily)      — PP, S1, R1 act as range anchors
-    → `deriv_heikin_ashi`               — confirm reversal candles at range extremes
+    → `deriv-stoch`  (use k=5 for faster signal in tight range)
+    → `deriv-rsi`    (period=9 or 14)  — overbought/oversold confluence
+    → `deriv-cci`                       — CCI < -100 = oversold buy; CCI > +100 = overbought sell
+    → `deriv-williams-r`                — %R ≤ -80 or ≥ -20 = extreme zone signals
+    → `deriv-bbands`                    — entry ONLY when price touches band extremes
+    → `deriv-technical-analysis`        — get S/R levels for range boundaries
+    → `deriv-pivot-points` (daily)      — PP, S1, R1 act as range anchors
+    → `deriv-heikin-ashi`               — confirm reversal candles at range extremes
   Deriv OPTIONAL:
-    → `deriv_keltner`                   — squeeze detection if consolidation is tightening
-    → `deriv_fibonacci`                 — 50% fib level often acts as range midpoint
+    → `deriv-keltner`                   — squeeze detection if consolidation is tightening
+    → `deriv-fibonacci`                 — 50% fib level often acts as range midpoint
   TV   → `coin_analysis` + `bollinger_scan`; mean-revert only at band extremes
 
 IF REGIME D (volatility spike) — DO NOT ENTER:
   → Do NOT call any entry-based analysis tools
-  → Call `deriv_atr` again to monitor when volatility normalizes
+  → Call `deriv-atr` again to monitor when volatility normalizes
   → Notify user clearly: market in shock, no safe entry exists right now
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -331,7 +331,7 @@ Applied universally across all regime analyses:
 </confidence_interpretation>
 
 <search_rules>
-- Use web search (info_search_web) for: economic calendar events, fundamental news, central bank announcements, geopolitical events affecting the market
+- Use web search (info-search-web) for: economic calendar events, fundamental news, central bank announcements, geopolitical events affecting the market
 - Information priority: MCP tool data (real-time) > web search > internal knowledge
 - Always cross-check: if MCP signals say BUY but news says major risk event in 1 hour, flag the conflict
 </search_rules>

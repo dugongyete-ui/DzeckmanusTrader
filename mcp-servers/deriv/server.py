@@ -1046,7 +1046,7 @@ async def list_tools() -> list[Tool]:
     return [
         # ── Market Data ───────────────────────────────────────────────────────
         Tool(
-            name="deriv_get_price",
+            name="deriv-get-price",
             description=(
                 "Get the current real-time price (tick) for a Deriv platform instrument. "
                 "Use ONLY for Deriv symbols — XAUUSD (Gold), forex pairs, Deriv commodities. "
@@ -1067,7 +1067,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_get_candles",
+            name="deriv-get-candles",
             description=(
                 "Get OHLC candlestick history for a Deriv platform instrument. "
                 "Use ONLY for Deriv symbols: XAUUSD, forex pairs, Deriv commodities. "
@@ -1089,7 +1089,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_get_tick_history",
+            name="deriv-get-tick-history",
             description="Get recent tick (price) history for a Deriv instrument.",
             inputSchema={
                 "type": "object",
@@ -1101,7 +1101,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_active_symbols",
+            name="deriv-active-symbols",
             description="List tradable symbols on Deriv. Filter by market: forex, commodities, cryptocurrency, indices.",
             inputSchema={
                 "type": "object",
@@ -1111,7 +1111,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_market_snapshot",
+            name="deriv-market-snapshot",
             description=(
                 "Get current prices for multiple Deriv platform instruments at once. "
                 "Use ONLY for Deriv symbols: XAUUSD, XAGUSD, major forex pairs. "
@@ -1130,7 +1130,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_pip_size",
+            name="deriv-pip-size",
             description="Get pip/decimal precision and instrument info for a Deriv symbol.",
             inputSchema={
                 "type": "object",
@@ -1143,7 +1143,7 @@ async def list_tools() -> list[Tool]:
 
         # ── Technical Indicators ──────────────────────────────────────────────
         Tool(
-            name="deriv_rsi",
+            name="deriv-rsi",
             description=(
                 "Calculate RSI (Relative Strength Index) from Deriv candle data. "
                 "RSI > 70 = overbought (potential sell), RSI < 30 = oversold (potential buy). "
@@ -1166,7 +1166,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_macd",
+            name="deriv-macd",
             description=(
                 "Calculate MACD (Moving Average Convergence Divergence) from Deriv candle data. "
                 "MACD line crosses above signal = bullish. Below = bearish. "
@@ -1192,7 +1192,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_bbands",
+            name="deriv-bbands",
             description=(
                 "Calculate Bollinger Bands from Deriv candle data. "
                 "Price near upper band = overbought zone. Near lower band = oversold zone. "
@@ -1217,7 +1217,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_ema",
+            name="deriv-ema",
             description=(
                 "Calculate EMA (Exponential Moving Average) for multiple periods from Deriv data. "
                 "EMA9 > EMA21 > EMA50 = strong uptrend. "
@@ -1246,7 +1246,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_atr",
+            name="deriv-atr",
             description=(
                 "Calculate ATR (Average True Range) from Deriv candle data. "
                 "ATR measures volatility — useful for setting Stop Loss and Take Profit. "
@@ -1270,7 +1270,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_stoch",
+            name="deriv-stoch",
             description=(
                 "Calculate Stochastic Oscillator (%K and %D) from Deriv candle data. "
                 "Both lines above 80 = overbought. Both below 20 = oversold. "
@@ -1294,7 +1294,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_technical_analysis",
+            name="deriv-technical-analysis",
             description=(
                 "Full technical analysis for a Deriv instrument — all indicators in one call. "
                 "Returns RSI, MACD, Bollinger Bands, EMA (9/21/50/200), ATR, Stochastic. "
@@ -1318,7 +1318,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_smart_analysis",
+            name="deriv-smart-analysis",
             description=(
                 "🏆 PROFESSIONAL-GRADE multi-timeframe trading analysis for Deriv platform instruments. "
                 "Use ONLY for XAUUSD (Gold), forex pairs (frxEURUSD, frxGBPUSD, etc.), and Deriv commodities. "
@@ -1343,7 +1343,7 @@ async def list_tools() -> list[Tool]:
 
         # ── Advanced Indicators ───────────────────────────────────────────────
         Tool(
-            name="deriv_fibonacci",
+            name="deriv-fibonacci",
             description=(
                 "Calculate Fibonacci retracement and extension levels from recent swing high/low on Deriv data. "
                 "Retracement levels: 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%. "
@@ -1368,7 +1368,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_pivot_points",
+            name="deriv-pivot-points",
             description=(
                 "Calculate classic Pivot Points (PP, R1/R2/R3, S1/S2/S3) from Deriv data. "
                 "Pivot points are used by institutions and market makers as key reference levels. "
@@ -1390,7 +1390,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_ichimoku",
+            name="deriv-ichimoku",
             description=(
                 "Calculate Ichimoku Cloud (Kinko Hyo) for a Deriv instrument. "
                 "Returns Tenkan-sen (9), Kijun-sen (26), Senkou Span A/B, Chikou Span. "
@@ -1417,7 +1417,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_parabolic_sar",
+            name="deriv-parabolic-sar",
             description=(
                 "Calculate Parabolic SAR (Stop and Reverse) for a Deriv instrument. "
                 "SAR below price = uptrend (hold long / buy). SAR above price = downtrend (hold short / sell). "
@@ -1443,7 +1443,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_supertrend",
+            name="deriv-supertrend",
             description=(
                 "Calculate Supertrend indicator for a Deriv instrument. "
                 "ATR-based dynamic support/resistance that flips direction with trend. "
@@ -1469,7 +1469,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_keltner",
+            name="deriv-keltner",
             description=(
                 "Calculate Keltner Channel for a Deriv instrument. "
                 "EMA ± (multiplier × ATR). More stable than Bollinger Bands in volatile markets. "
@@ -1496,7 +1496,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_donchian",
+            name="deriv-donchian",
             description=(
                 "Calculate Donchian Channel (highest high / lowest low over N periods) for a Deriv instrument. "
                 "Breakout above upper band = strong bullish signal. Below lower = strong bearish. "
@@ -1520,7 +1520,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_cci",
+            name="deriv-cci",
             description=(
                 "Calculate CCI (Commodity Channel Index) for a Deriv instrument. "
                 "Originally designed for commodities — excellent for XAUUSD and Silver. "
@@ -1546,7 +1546,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_williams_r",
+            name="deriv-williams-r",
             description=(
                 "Calculate Williams %R for a Deriv instrument. "
                 "%R near 0 = overbought (potential sell). %R near -100 = oversold (potential buy). "
@@ -1570,7 +1570,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="deriv_heikin_ashi",
+            name="deriv-heikin-ashi",
             description=(
                 "Calculate Heikin Ashi candles for a Deriv instrument and analyze trend. "
                 "Heikin Ashi smooths out noise — consecutive bullish HA candles with no lower shadow = strong uptrend. "
@@ -1613,7 +1613,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 async def _dispatch(name: str, args: dict) -> str:
 
     # ── deriv_get_price ───────────────────────────────────────────────────────
-    if name == "deriv_get_price":
+    if name == "deriv-get-price":
         symbol = args.get("symbol", "frxXAUUSD")
         resp = await deriv_request({
             "ticks_history": symbol,
@@ -1639,7 +1639,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_get_candles ─────────────────────────────────────────────────────
-    elif name == "deriv_get_candles":
+    elif name == "deriv-get-candles":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         count = min(args.get("count", 50), 5000)
@@ -1658,7 +1658,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_get_tick_history ────────────────────────────────────────────────
-    elif name == "deriv_get_tick_history":
+    elif name == "deriv-get-tick-history":
         symbol = args.get("symbol", "frxXAUUSD")
         count = min(args.get("count", 100), 5000)
         resp = await deriv_request({
@@ -1686,7 +1686,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_active_symbols ──────────────────────────────────────────────────
-    elif name == "deriv_active_symbols":
+    elif name == "deriv-active-symbols":
         market_filter = args.get("market", "")
         resp = await deriv_request({"active_symbols": "brief", "product_type": "basic"})
         if "error" in resp:
@@ -1707,7 +1707,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_market_snapshot ─────────────────────────────────────────────────
-    elif name == "deriv_market_snapshot":
+    elif name == "deriv-market-snapshot":
         symbols = args.get("symbols", ["frxXAUUSD","frxXAGUSD","frxEURUSD","frxGBPUSD","frxUSDJPY","cryBTCUSD"])
         results = await asyncio.gather(
             *[deriv_request({"ticks": sym, "subscribe": 0}) for sym in symbols],
@@ -1726,7 +1726,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_pip_size ────────────────────────────────────────────────────────
-    elif name == "deriv_pip_size":
+    elif name == "deriv-pip-size":
         symbol = args.get("symbol", "frxXAUUSD")
         resp = await deriv_request({"active_symbols": "full", "product_type": "basic"})
         if "error" in resp:
@@ -1740,7 +1740,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_rsi ─────────────────────────────────────────────────────────────
-    elif name == "deriv_rsi":
+    elif name == "deriv-rsi":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period = args.get("period", 14)
@@ -1777,7 +1777,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_macd ────────────────────────────────────────────────────────────
-    elif name == "deriv_macd":
+    elif name == "deriv-macd":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         fast = args.get("fast", 12)
@@ -1817,7 +1817,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_bbands ──────────────────────────────────────────────────────────
-    elif name == "deriv_bbands":
+    elif name == "deriv-bbands":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period = args.get("period", 20)
@@ -1862,7 +1862,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_ema ─────────────────────────────────────────────────────────────
-    elif name == "deriv_ema":
+    elif name == "deriv-ema":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         periods = args.get("periods", [9, 21, 50, 100, 200])
@@ -1904,7 +1904,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_atr ─────────────────────────────────────────────────────────────
-    elif name == "deriv_atr":
+    elif name == "deriv-atr":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period = args.get("period", 14)
@@ -1947,7 +1947,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_stoch ───────────────────────────────────────────────────────────
-    elif name == "deriv_stoch":
+    elif name == "deriv-stoch":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         k_period = args.get("k_period", 14)
@@ -1985,7 +1985,7 @@ async def _dispatch(name: str, args: dict) -> str:
         )
 
     # ── deriv_technical_analysis ──────────────────────────────────────────────
-    elif name == "deriv_technical_analysis":
+    elif name == "deriv-technical-analysis":
         symbol = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         count = max(args.get("count", 350), 350)
@@ -2161,7 +2161,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_smart_analysis ──────────────────────────────────────────────────
-    elif name == "deriv_smart_analysis":
+    elif name == "deriv-smart-analysis":
         symbol = args.get("symbol", "frxXAUUSD")
 
         # Fetch 3 timeframes + extra candles for divergence computation
@@ -2534,7 +2534,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(str(r) for r in result)
 
     # ── deriv_fibonacci ───────────────────────────────────────────────────────
-    elif name == "deriv_fibonacci":
+    elif name == "deriv-fibonacci":
         symbol       = args.get("symbol", "frxXAUUSD")
         granularity  = args.get("granularity", 14400)
         swing_lb     = args.get("swing_lookback", 50)
@@ -2585,7 +2585,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_pivot_points ────────────────────────────────────────────────────
-    elif name == "deriv_pivot_points":
+    elif name == "deriv-pivot-points":
         symbol = args.get("symbol", "frxXAUUSD")
         period = args.get("period", "daily")
 
@@ -2649,7 +2649,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_ichimoku ────────────────────────────────────────────────────────
-    elif name == "deriv_ichimoku":
+    elif name == "deriv-ichimoku":
         symbol    = args.get("symbol", "frxXAUUSD")
         gran      = args.get("granularity", 14400)
         tenkan    = args.get("tenkan", 9)
@@ -2724,7 +2724,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_parabolic_sar ───────────────────────────────────────────────────
-    elif name == "deriv_parabolic_sar":
+    elif name == "deriv-parabolic-sar":
         symbol     = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         af_start   = args.get("af_start", 0.02)
@@ -2776,7 +2776,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_supertrend ──────────────────────────────────────────────────────
-    elif name == "deriv_supertrend":
+    elif name == "deriv-supertrend":
         symbol      = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period      = args.get("period", 10)
@@ -2827,7 +2827,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_keltner ─────────────────────────────────────────────────────────
-    elif name == "deriv_keltner":
+    elif name == "deriv-keltner":
         symbol      = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         ema_period  = args.get("ema_period", 20)
@@ -2878,7 +2878,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_donchian ────────────────────────────────────────────────────────
-    elif name == "deriv_donchian":
+    elif name == "deriv-donchian":
         symbol      = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period      = args.get("period", 20)
@@ -2932,7 +2932,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_cci ─────────────────────────────────────────────────────────────
-    elif name == "deriv_cci":
+    elif name == "deriv-cci":
         symbol      = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period      = args.get("period", 20)
@@ -2983,7 +2983,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_williams_r ──────────────────────────────────────────────────────
-    elif name == "deriv_williams_r":
+    elif name == "deriv-williams-r":
         symbol      = args.get("symbol", "frxXAUUSD")
         granularity = args.get("granularity", 3600)
         period      = args.get("period", 14)
@@ -3030,7 +3030,7 @@ async def _dispatch(name: str, args: dict) -> str:
         return "\n".join(lines)
 
     # ── deriv_heikin_ashi ─────────────────────────────────────────────────────
-    elif name == "deriv_heikin_ashi":
+    elif name == "deriv-heikin-ashi":
         symbol       = args.get("symbol", "frxXAUUSD")
         granularity  = args.get("granularity", 3600)
         analyze_last = args.get("analyze_last", 10)
