@@ -147,9 +147,19 @@ class ExecutionAgent(BaseAgent):
 
         content = vision_content if vision_content else prompt
         retry_text_only = False
+        # Track whether any real market-analysis tool (non-message toolkit) was
+        # actually called.  When the LLM skips all tool calls and fabricates a
+        # success JSON ("ghost success"), this stays False so we can retry.
+        real_tools_called = False
 
         try:
             async for event in self._handle_execution_events(step, content):
+                if (
+                    isinstance(event, ToolEvent)
+                    and event.status == ToolStatus.CALLING
+                    and event.tool_name != "message"
+                ):
+                    real_tools_called = True
                 yield event
         except Exception as e:
             error_str = str(e).lower()
@@ -166,15 +176,19 @@ class ExecutionAgent(BaseAgent):
 
         if retry_text_only:
             logger.info("Retrying execute_step without vision images")
+            real_tools_called = False
             async for event in self._handle_execution_events(step, prompt):
+                if (
+                    isinstance(event, ToolEvent)
+                    and event.status == ToolStatus.CALLING
+                    and event.tool_name != "message"
+                ):
+                    real_tools_called = True
                 yield event
 
-        # --- Retry when LLM skipped tool calls and wrote plain text ---
-        # This happens when accumulated context causes the model to produce a
-        # free-text answer (sometimes including hallucinated "Tool X does not
-        # exist" lines) instead of using the function-calling interface.
-        # Detect the pattern: step failed AND the result is plain text (non-JSON),
-        # which means no real tool calls were made.
+        # --- Case 1: LLM returned plain text with no tool calls at all ---
+        # Detect: step failed + error is "non-JSON response" (set in
+        # _handle_execution_events when _parse_json returns None).
         _is_skipped_tools = (
             not retry_text_only
             and not step.success
@@ -186,11 +200,11 @@ class ExecutionAgent(BaseAgent):
                 f"Step {step.id} completed with no tool calls (LLM returned plain text). "
                 "Retrying once with a correction prompt."
             )
-            # Reset step state for the retry pass
             step.status = ExecutionStatus.RUNNING
             step.result = None
             step.error = None
             step.success = False
+            real_tools_called = False
 
             correction_content = (
                 prompt
@@ -202,9 +216,52 @@ class ExecutionAgent(BaseAgent):
             )
             try:
                 async for event in self._handle_execution_events(step, correction_content):
+                    if (
+                        isinstance(event, ToolEvent)
+                        and event.status == ToolStatus.CALLING
+                        and event.tool_name != "message"
+                    ):
+                        real_tools_called = True
                     yield event
             except Exception as retry_err:
                 logger.error(f"Retry of step {step.id} also raised: {retry_err}")
+
+        # --- Case 2: Ghost success — LLM returned valid JSON {"success": true}
+        # but never called any real market-analysis tools.  This happens when
+        # accumulated context (from earlier steps with many tool calls) causes
+        # the model to fabricate a completion response instead of using tools.
+        # The step shows a checkmark in the UI with no tool chips or narration.
+        _is_ghost_success = (
+            not retry_text_only
+            and not _is_skipped_tools
+            and step.success
+            and step.status == ExecutionStatus.COMPLETED
+            and not real_tools_called
+        )
+        if _is_ghost_success:
+            logger.warning(
+                f"Step {step.id} reported success but called no market analysis tools "
+                "(ghost success — LLM fabricated result). Retrying once with correction prompt."
+            )
+            step.status = ExecutionStatus.RUNNING
+            step.result = None
+            step.error = None
+            step.success = False
+
+            correction_content = (
+                prompt
+                + "\n\n[CORRECTION — MANDATORY]: You reported this step as complete without "
+                "calling any market analysis tools. You MUST actually call the required tools "
+                "to gather real market data — do NOT fabricate or assume results. "
+                "Start by calling message_notify_user to narrate your approach, then call "
+                "the market tools one by one. "
+                "Only return the final JSON result after completing all tool calls."
+            )
+            try:
+                async for event in self._handle_execution_events(step, correction_content):
+                    yield event
+            except Exception as retry_err:
+                logger.error(f"Ghost-success retry of step {step.id} also raised: {retry_err}")
 
         step.status = ExecutionStatus.COMPLETED
 
