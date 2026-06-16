@@ -1,7 +1,7 @@
 // Backend API service
-import { apiClient, API_CONFIG, ApiResponse, createSSEConnection, SSECallbacks } from './client';
+import { apiClient, ApiResponse, createSSEConnection, SSECallbacks } from './client';
 import { AgentSSEEvent } from '../types/event';
-import { CreateSessionResponse, GetSessionResponse, FileViewResponse, ListSessionResponse, SignedUrlResponse, ShareSessionResponse, SharedSessionResponse } from '../types/response';
+import { CreateSessionResponse, GetSessionResponse, FileViewResponse, ListSessionResponse, ShareSessionResponse, SharedSessionResponse } from '../types/response';
 import type { FileInfo } from './file';
 
 
