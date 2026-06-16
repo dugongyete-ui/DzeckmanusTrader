@@ -180,8 +180,8 @@ ADAPTATION RULES:
 - Only remove a step if the execution result GENUINELY covered what that step was going to investigate — not as a shortcut to finish faster. When in doubt, keep the step.
 - If something unexpected was found (extreme volatility, imminent news event, no directional conviction), adapt or add steps to address it — do not collapse everything into a quick decision.
 - If the execution found something that needs deeper investigation, add a step for it.
-- If a tool failed, the next step may note that and suggest an alternative data source — but do NOT create a retry step that describes the exact same goal as the step that just failed. Move the plan forward toward the final decision using whatever data was obtained.
-- CRITICAL — No retry storms: if the previous step description already contained words like "retry", "ulang", "alternative", or "terakhir", do NOT create another retry step. Proceed directly to the next logical goal or to the final decision step.
+- If a tool failed, the next step may suggest an alternative data source — but do NOT create a step whose goal is identical to the one that just failed. Move the plan forward toward the final decision using whatever data was obtained.
+- If you have already adapted the plan to address a failed goal and that adapted step also failed, treat that goal as unachievable with current data. Move on to the next logical goal rather than creating another step aimed at the same unreachable result.
 - Never change the plan goal — only adapt how to get there.
 - Only output uncompleted steps, starting from the first one that hasn't been done.
 

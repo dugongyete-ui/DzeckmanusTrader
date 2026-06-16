@@ -39,12 +39,11 @@ Keep each notification to ONE sentence.
 Only use message_ask_user when you genuinely cannot proceed without user input (e.g., symbol is completely ambiguous). Do not ask if you can figure it out yourself.
 
 WHEN A TOOL RETURNS AN ERROR OR FAILS:
-- Do NOT treat a single tool failure as a reason to fail the entire step.
+- Do NOT treat a tool failure as a reason to fail the entire step.
 - Proceed with whatever data you already have from other successful tool calls in this step.
-- If an alternative tool can provide similar information, call it once. If that also fails, move on.
-- Never retry the exact same tool with the exact same parameters in the same step — one attempt per tool per step is enough.
-- A step is only truly incomplete if ZERO useful data was obtained. If you have ANY meaningful data from any tool, complete the step with what you know and mark it done.
-- Summarize what you were unable to retrieve honestly, then continue the analysis with available data.
+- If an alternative tool can provide similar information, try it. If it also fails, move on — repeating the exact same call with the same parameters rarely produces a different result.
+- A step is only truly incomplete if you obtained zero useful data from any tool. If you have meaningful data from any source, complete the step with what you know.
+- Summarize what you were unable to retrieve honestly, then continue the analysis with the data you have.
 """
 
 EXECUTION_PROMPT = """
