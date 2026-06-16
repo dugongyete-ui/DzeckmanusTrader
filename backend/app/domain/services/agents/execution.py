@@ -59,9 +59,14 @@ class ExecutionAgent(BaseAgent):
     async def _handle_execution_events(self, step: Step, content) -> AsyncGenerator[BaseEvent, None]:
         async for event in self.execute(content):
             if isinstance(event, ErrorEvent):
-                step.status = ExecutionStatus.FAILED
-                step.error = event.error
-                yield StepEvent(status=StepStatus.FAILED, step=step)
+                # Log tool lookup errors but do NOT mark the step as FAILED here.
+                # When a tool is not found, base.py already appends a ToolMessage telling
+                # the LLM "this tool is not available — use only listed tools", so the LLM
+                # can adapt and retry with the correct name.  Prematurely setting FAILED +
+                # emitting StepEvent(FAILED) caused a FAILED→COMPLETED race in the UI
+                # and masked the real error.  The step result handler below will set the
+                # correct final status once the LLM produces its text response.
+                logger.debug(f"Step {step.id} tool error (handled by LLM retry): {event.error}")
             elif isinstance(event, MessageEvent):
                 step.status = ExecutionStatus.COMPLETED
                 parsed_response = await self._parse_json(event.message)
@@ -163,6 +168,43 @@ class ExecutionAgent(BaseAgent):
             logger.info("Retrying execute_step without vision images")
             async for event in self._handle_execution_events(step, prompt):
                 yield event
+
+        # --- Retry when LLM skipped tool calls and wrote plain text ---
+        # This happens when accumulated context causes the model to produce a
+        # free-text answer (sometimes including hallucinated "Tool X does not
+        # exist" lines) instead of using the function-calling interface.
+        # Detect the pattern: step failed AND the result is plain text (non-JSON),
+        # which means no real tool calls were made.
+        _is_skipped_tools = (
+            not retry_text_only
+            and not step.success
+            and step.status == ExecutionStatus.COMPLETED
+            and step.error == "LLM returned a non-JSON response."
+        )
+        if _is_skipped_tools:
+            logger.warning(
+                f"Step {step.id} completed with no tool calls (LLM returned plain text). "
+                "Retrying once with a correction prompt."
+            )
+            # Reset step state for the retry pass
+            step.status = ExecutionStatus.RUNNING
+            step.result = None
+            step.error = None
+            step.success = False
+
+            correction_content = (
+                prompt
+                + "\n\n[CORRECTION — MANDATORY]: Your previous response was plain text instead of "
+                "tool calls. You MUST begin by calling message_notify_user with your opening "
+                "narration, then call the market analysis tools one by one. "
+                "Do NOT write a text response — call tools first. "
+                "Only return the final JSON result after completing all tool calls."
+            )
+            try:
+                async for event in self._handle_execution_events(step, correction_content):
+                    yield event
+            except Exception as retry_err:
+                logger.error(f"Retry of step {step.id} also raised: {retry_err}")
 
         step.status = ExecutionStatus.COMPLETED
 
