@@ -1072,6 +1072,302 @@ def calc_heikin_ashi(opens: list[float], highs: list[float], lows: list[float],
     }
 
 
+# ── Advanced Analysis Helpers (Tier 1-3) ─────────────────────────────────────
+
+def calc_volume_profile(candles: list[dict], bins: int = 20) -> dict:
+    """Volume Profile / VPVR — POC, VAH, VAL, HVN, LVN using range as volume proxy."""
+    if not candles:
+        return {}
+    highs = [float(c["high"]) for c in candles]
+    lows  = [float(c["low"])  for c in candles]
+    price_min = min(lows)
+    price_max = max(highs)
+    if price_max == price_min:
+        return {}
+    bin_size     = (price_max - price_min) / bins
+    volume_nodes = [0.0] * bins
+    for c in candles:
+        h, l = float(c["high"]), float(c["low"])
+        rng  = h - l or bin_size * 0.1
+        lo_b = max(0,       int((l - price_min) / bin_size))
+        hi_b = min(bins-1,  int((h - price_min) / bin_size))
+        n_b  = hi_b - lo_b + 1
+        for b in range(lo_b, hi_b + 1):
+            volume_nodes[b] += rng / n_b
+    poc_bin   = volume_nodes.index(max(volume_nodes))
+    poc_price = price_min + (poc_bin + 0.5) * bin_size
+    total_vol = sum(volume_nodes)
+    target    = total_vol * 0.70
+    vah_b, val_b, va_vol = poc_bin, poc_bin, volume_nodes[poc_bin]
+    while va_vol < target:
+        above = volume_nodes[vah_b + 1] if vah_b + 1 < bins else 0
+        below = volume_nodes[val_b - 1] if val_b - 1 >= 0  else 0
+        if above >= below and vah_b + 1 < bins:
+            vah_b += 1; va_vol += above
+        elif val_b - 1 >= 0:
+            val_b -= 1; va_vol += below
+        else:
+            break
+    avg_vol  = total_vol / bins
+    hvn = [round(price_min + (i+0.5)*bin_size, 5) for i, v in enumerate(volume_nodes) if v > avg_vol * 1.5]
+    lvn = [round(price_min + (i+0.5)*bin_size, 5) for i, v in enumerate(volume_nodes) if 0 < v < avg_vol * 0.5]
+    return {
+        "poc": round(poc_price, 5),
+        "vah": round(price_min + (vah_b + 1) * bin_size, 5),
+        "val": round(price_min + val_b * bin_size, 5),
+        "price_min": round(price_min, 5), "price_max": round(price_max, 5),
+        "hvn_nodes": hvn[-5:], "lvn_nodes": lvn[-5:],
+        "total_candles": len(candles),
+    }
+
+
+def detect_fvg(candles: list[dict]) -> list[dict]:
+    """Fair Value Gap (FVG/Imbalance) detector — bullish & bearish."""
+    fvgs = []
+    for i in range(1, len(candles) - 1):
+        prev_h = float(candles[i-1]["high"]); prev_l = float(candles[i-1]["low"])
+        next_h = float(candles[i+1]["high"]); next_l = float(candles[i+1]["low"])
+        epoch  = candles[i]["epoch"]
+        if next_l > prev_h:
+            gap  = next_l - prev_h
+            mid  = (prev_h + next_l) / 2
+            filled = any(float(candles[j]["low"]) <= prev_h + gap * 0.5
+                         for j in range(i+2, len(candles)))
+            fvgs.append({"type":"bullish","top":round(next_l,5),"bottom":round(prev_h,5),
+                         "mid":round(mid,5),"size":round(gap,5),"epoch":epoch,"filled":filled,"idx":i})
+        elif next_h < prev_l:
+            gap  = prev_l - next_h
+            mid  = (prev_l + next_h) / 2
+            filled = any(float(candles[j]["high"]) >= prev_l - gap * 0.5
+                         for j in range(i+2, len(candles)))
+            fvgs.append({"type":"bearish","top":round(prev_l,5),"bottom":round(next_h,5),
+                         "mid":round(mid,5),"size":round(gap,5),"epoch":epoch,"filled":filled,"idx":i})
+    return sorted(fvgs, key=lambda x: x["idx"], reverse=True)[:15]
+
+
+def detect_order_blocks(candles: list[dict], lookback: int = 5) -> list[dict]:
+    """Order Block detector (ICT/SMC) — last opposing candle before strong impulse."""
+    if len(candles) < lookback + 3:
+        return []
+    closes = [float(c["close"]) for c in candles]
+    opens  = [float(c["open"])  for c in candles]
+    highs  = [float(c["high"])  for c in candles]
+    lows   = [float(c["low"])   for c in candles]
+    bodies = [abs(closes[i]-opens[i]) for i in range(len(candles))]
+    avg_body = sum(bodies)/len(bodies) if bodies else 1
+    current  = closes[-1]
+    obs = []
+    for i in range(1, len(candles) - lookback):
+        for j in range(i+1, min(i+lookback+1, len(candles))):
+            body_j = closes[j] - opens[j]
+            # Bullish OB: bearish candle → strong bullish impulse
+            if closes[i] < opens[i] and body_j > avg_body*1.5 and closes[j] > highs[i]:
+                mitigated = any(closes[k] < float(candles[i]["low"])
+                                for k in range(j+1, len(candles)))
+                obs.append({"type":"bullish","high":round(highs[i],5),"low":round(lows[i],5),
+                            "mid":round((highs[i]+lows[i])/2,5),"epoch":candles[i]["epoch"],
+                            "mitigated":mitigated,"distance_pct":round((current-highs[i])/highs[i]*100,3),"idx":i})
+                break
+            # Bearish OB: bullish candle → strong bearish impulse
+            body_j_bear = opens[j] - closes[j]
+            if closes[i] > opens[i] and body_j_bear > avg_body*1.5 and closes[j] < lows[i]:
+                mitigated = any(closes[k] > float(candles[i]["high"])
+                                for k in range(j+1, len(candles)))
+                obs.append({"type":"bearish","high":round(highs[i],5),"low":round(lows[i],5),
+                            "mid":round((highs[i]+lows[i])/2,5),"epoch":candles[i]["epoch"],
+                            "mitigated":mitigated,"distance_pct":round((lows[i]-current)/lows[i]*100,3),"idx":i})
+                break
+    return sorted(obs, key=lambda x: x["idx"], reverse=True)[:10]
+
+
+def detect_swing_structure(candles: list[dict], lookback: int = 3) -> dict:
+    """Market structure: HH/HL/LH/LL, BOS (Break of Structure), CHoCH (Change of Character)."""
+    if len(candles) < lookback * 2 + 1:
+        return {}
+    highs  = [float(c["high"]) for c in candles]
+    lows   = [float(c["low"])  for c in candles]
+    epochs = [c["epoch"]       for c in candles]
+    swing_highs, swing_lows = [], []
+    for i in range(lookback, len(candles) - lookback):
+        if highs[i] == max(highs[i-lookback:i+lookback+1]):
+            swing_highs.append({"price": round(highs[i],5), "epoch": epochs[i], "idx": i})
+        if lows[i]  == min(lows[i-lookback:i+lookback+1]):
+            swing_lows.append({"price":  round(lows[i],5),  "epoch": epochs[i], "idx": i})
+    structure = "neutral"; bos = None; choch = None
+    last_hh = prev_hh = last_hl = prev_hl = None
+    if len(swing_highs) >= 2:
+        last_hh, prev_hh = swing_highs[-1]["price"], swing_highs[-2]["price"]
+    if len(swing_lows)  >= 2:
+        last_hl, prev_hl = swing_lows[-1]["price"],  swing_lows[-2]["price"]
+    if last_hh and prev_hh and last_hl and prev_hl:
+        bull = last_hh > prev_hh and last_hl > prev_hl
+        bear = last_hh < prev_hh and last_hl < prev_hl
+        structure = "bullish" if bull else ("bearish" if bear else "neutral")
+        if bull:
+            bos = {"direction":"bullish","level":round(prev_hh,5),"broken_at":round(last_hh,5)}
+        elif bear:
+            bos = {"direction":"bearish","level":round(prev_hl,5),"broken_at":round(last_hl,5)}
+        if last_hh < prev_hh and last_hl > prev_hl:
+            choch = {"type":"potential_bearish_flip","level":round(prev_hl,5)}
+        elif last_hh > prev_hh and last_hl < prev_hl:
+            choch = {"type":"potential_bullish_flip","level":round(prev_hh,5)}
+    return {
+        "structure": structure, "swing_highs": swing_highs[-5:], "swing_lows": swing_lows[-5:],
+        "last_hh": last_hh, "last_hl": last_hl, "prev_hh": prev_hh, "prev_hl": prev_hl,
+        "bos": bos, "choch": choch, "current_price": round(float(candles[-1]["close"]),5),
+    }
+
+
+def detect_liquidity_sweeps(candles: list[dict], lookback: int = 20) -> list[dict]:
+    """Liquidity sweep / stop hunt detector — price sweeps prior swing then reverses."""
+    if len(candles) < lookback + 3:
+        return []
+    highs  = [float(c["high"])  for c in candles]
+    lows   = [float(c["low"])   for c in candles]
+    closes = [float(c["close"]) for c in candles]
+    epochs = [c["epoch"]        for c in candles]
+    sweeps = []
+    for i in range(lookback, len(candles) - 1):
+        prior_high = max(highs[i-lookback:i])
+        prior_low  = min(lows[i-lookback:i])
+        h, l, c_ = highs[i], lows[i], closes[i]
+        if h > prior_high and c_ < prior_high:
+            sweep = h - prior_high; rev = prior_high - c_
+            if rev > sweep * 0.5:
+                sweeps.append({"type":"bearish_sweep","swept_level":round(prior_high,5),
+                               "wick_high":round(h,5),"close":round(c_,5),
+                               "sweep_size":round(sweep,5),"epoch":epochs[i],"idx":i,
+                               "signal":"sell — stop hunt above resistance complete"})
+        elif l < prior_low and c_ > prior_low:
+            sweep = prior_low - l; rev = c_ - prior_low
+            if rev > sweep * 0.5:
+                sweeps.append({"type":"bullish_sweep","swept_level":round(prior_low,5),
+                               "wick_low":round(l,5),"close":round(c_,5),
+                               "sweep_size":round(sweep,5),"epoch":epochs[i],"idx":i,
+                               "signal":"buy — stop hunt below support complete"})
+    return sorted(sweeps, key=lambda x: x["idx"], reverse=True)[:10]
+
+
+def calc_session_ohlc(candles: list[dict], granularity: int) -> dict:
+    """Session OHLC — Asia (00-08 UTC), London (07-16 UTC), New York (13-22 UTC)."""
+    if granularity > 3600:
+        return {}
+    sess_def = {"asia": (0,8), "london": (7,16), "new_york": (13,22)}
+    buckets: dict = {s: [] for s in sess_def}
+    for c in candles:
+        h = datetime.utcfromtimestamp(c["epoch"]).hour
+        for s, (st, en) in sess_def.items():
+            if st <= h < en:
+                buckets[s].append(c)
+    result = {}
+    for s, sc in buckets.items():
+        if not sc:
+            result[s] = None; continue
+        result[s] = {"high":  round(max(float(c["high"]) for c in sc),5),
+                     "low":   round(min(float(c["low"])  for c in sc),5),
+                     "open":  round(float(sc[0]["open"]),5),
+                     "close": round(float(sc[-1]["close"]),5),
+                     "candle_count": len(sc)}
+    return result
+
+
+def calc_prev_levels(daily_candles: list[dict]) -> dict:
+    """PDH/PDL/PDC, PWH/PWL, PMH/PML from daily candle history."""
+    result = {}
+    if len(daily_candles) >= 2:
+        pd_ = daily_candles[-2]
+        result["prev_day"] = {"high":round(float(pd_["high"]),5),"low":round(float(pd_["low"]),5),
+                              "open":round(float(pd_["open"]),5),"close":round(float(pd_["close"]),5),
+                              "date":datetime.utcfromtimestamp(pd_["epoch"]).strftime("%Y-%m-%d")}
+    if daily_candles:
+        cd = daily_candles[-1]
+        result["current_day"] = {"high":round(float(cd["high"]),5),"low":round(float(cd["low"]),5),
+                                 "open":round(float(cd["open"]),5),"close":round(float(cd["close"]),5),
+                                 "date":datetime.utcfromtimestamp(cd["epoch"]).strftime("%Y-%m-%d")}
+    if len(daily_candles) >= 7:
+        today_iso = datetime.utcnow().isocalendar()
+        pw_h, pw_l = [], []
+        for dc in daily_candles:
+            iso = datetime.utcfromtimestamp(dc["epoch"]).isocalendar()
+            prev_week = (today_iso[1] - 1) or 52
+            if iso[1] == prev_week:
+                pw_h.append(float(dc["high"])); pw_l.append(float(dc["low"]))
+        if pw_h:
+            result["prev_week"] = {"high":round(max(pw_h),5),"low":round(min(pw_l),5)}
+    if len(daily_candles) >= 20:
+        now = datetime.utcnow()
+        pm_h, pm_l = [], []
+        for dc in daily_candles:
+            dt = datetime.utcfromtimestamp(dc["epoch"])
+            prev_m = now.month - 1 or 12
+            prev_y = now.year if now.month > 1 else now.year - 1
+            if dt.month == prev_m and dt.year == prev_y:
+                pm_h.append(float(dc["high"])); pm_l.append(float(dc["low"]))
+        if pm_h:
+            result["prev_month"] = {"high":round(max(pm_h),5),"low":round(min(pm_l),5)}
+    return result
+
+
+def calc_seasonality(daily_candles: list[dict]) -> dict:
+    """Monthly seasonality: avg return, win rate, and bias per calendar month."""
+    if len(daily_candles) < 30:
+        return {}
+    from collections import defaultdict
+    monthly: dict = defaultdict(list)
+    for i in range(1, len(daily_candles)):
+        dt = datetime.utcfromtimestamp(daily_candles[i]["epoch"])
+        ret = (float(daily_candles[i]["close"]) - float(daily_candles[i-1]["close"])) \
+              / float(daily_candles[i-1]["close"]) * 100
+        monthly[dt.month].append(ret)
+    mn = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
+          7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
+    stats = {}
+    for m, rets in monthly.items():
+        if len(rets) < 5: continue
+        avg = sum(rets)/len(rets)
+        wr  = sum(1 for r in rets if r > 0)/len(rets)*100
+        stats[m] = {"name":mn[m],"avg_ret":round(avg,3),"win_rate":round(wr,1),
+                    "samples":len(rets),"bias":"bullish" if avg>0.1 else ("bearish" if avg<-0.1 else "neutral")}
+    if not stats: return {}
+    now_m = datetime.utcnow().month
+    nxt_m = (now_m % 12) + 1
+    return {"current_month": stats.get(now_m), "next_month": stats.get(nxt_m),
+            "best_month":  stats.get(max(stats, key=lambda m: stats[m]["avg_ret"])),
+            "worst_month": stats.get(min(stats, key=lambda m: stats[m]["avg_ret"])),
+            "all_months":  stats}
+
+
+def calc_correlation(candles_a: list[dict], candles_b: list[dict], period: int = 20) -> dict:
+    """Pearson correlation between two Deriv price series aligned by epoch."""
+    if not candles_a or not candles_b:
+        return {}
+    map_a = {c["epoch"]: float(c["close"]) for c in candles_a}
+    map_b = {c["epoch"]: float(c["close"]) for c in candles_b}
+    common = sorted(set(map_a) & set(map_b))
+    if len(common) < period:
+        return {"correlation": None, "note": f"Only {len(common)} common candles (need {period})"}
+    ca = [map_a[e] for e in common[-period:]]
+    cb = [map_b[e] for e in common[-period:]]
+    n  = len(ca)
+    ma = sum(ca)/n; mb = sum(cb)/n
+    cov  = sum((ca[i]-ma)*(cb[i]-mb) for i in range(n))
+    sa   = math.sqrt(sum((x-ma)**2 for x in ca))
+    sb   = math.sqrt(sum((x-mb)**2 for x in cb))
+    corr = cov/(sa*sb) if sa and sb else None
+    rets_a = [(ca[i]-ca[i-1])/ca[i-1] for i in range(1,n)]
+    rets_b = [(cb[i]-cb[i-1])/cb[i-1] for i in range(1,n)]
+    mra=sum(rets_a)/len(rets_a); mrb=sum(rets_b)/len(rets_b)
+    cov_r = sum((rets_a[i]-mra)*(rets_b[i]-mrb) for i in range(len(rets_a)))
+    sra=math.sqrt(sum((x-mra)**2 for x in rets_a)); srb=math.sqrt(sum((x-mrb)**2 for x in rets_b))
+    ret_corr = cov_r/(sra*srb) if sra and srb else None
+    if corr is None: return {"correlation": None}
+    label = ("strong positive" if corr>0.7 else "moderate positive" if corr>0.4 else
+             "weak positive" if corr>0.2 else "uncorrelated" if corr>-0.2 else
+             "weak negative" if corr>-0.4 else "moderate negative" if corr>-0.7 else "strong negative")
+    return {"price_correlation":round(corr,4),"return_correlation":round(ret_corr,4) if ret_corr else None,
+            "label":label,"period":period,"common_candles":len(common)}
+
+
 # ── Tool Definitions ──────────────────────────────────────────────────────────
 
 @app.list_tools()
@@ -1625,6 +1921,234 @@ async def list_tools() -> list[Tool]:
                     "count": {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
                 },
                 "required": ["symbol"]
+            }
+        ),
+
+        # ── Tier 1: Institutional Structure ───────────────────────────────────
+        Tool(
+            name="deriv-volume-profile",
+            description=(
+                "Volume Profile / VPVR for a Deriv instrument. "
+                "Identifies POC (Point of Control — price with most activity), "
+                "VAH (Value Area High), VAL (Value Area Low), HVN (High Volume Nodes = strong support/resistance), "
+                "and LVN (Low Volume Nodes = fast-move zones). "
+                "POC acts as a magnet — price tends to gravitate toward it. "
+                "Use to find institutional price levels that simple S/R misses."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count": {"type": "integer", "description": "Candles to build profile from (default 200)", "default": 200},
+                    "bins":  {"type": "integer", "description": "Price bins for distribution (default 20, max 50)", "default": 20}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-fvg",
+            description=(
+                "Fair Value Gap (FVG) / Imbalance detector for a Deriv instrument. "
+                "Bullish FVG: 3-candle pattern where candle[i+1].low > candle[i-1].high — "
+                "price moved up leaving an unfilled gap, likely to be revisited. "
+                "Bearish FVG: candle[i+1].high < candle[i-1].low — downside imbalance. "
+                "Unfilled FVGs are strong magnet zones for price. "
+                "Core to ICT/SMC methodology — use alongside order blocks for high-probability entries."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count": {"type": "integer", "description": "Candles to scan (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-order-blocks",
+            description=(
+                "Order Block detector (ICT/SMC methodology) for a Deriv instrument. "
+                "A bullish OB = last bearish candle before a strong bullish impulse that breaks prior structure. "
+                "A bearish OB = last bullish candle before a strong bearish impulse. "
+                "Order blocks represent institutional accumulation/distribution zones. "
+                "Price frequently returns to mitigate (retest) unmitigated OBs. "
+                "Combine with FVG for confluence — OB + FVG overlap = highest-probability entry zone."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count":   {"type": "integer", "description": "Candles to scan (default 150)", "default": 150},
+                    "lookback": {"type": "integer", "description": "Max candles after OB to find impulse (default 5)", "default": 5}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-swing-structure",
+            description=(
+                "Market structure analysis: automated HH/HL/LH/LL detection, "
+                "Break of Structure (BOS), and Change of Character (CHoCH) for a Deriv instrument. "
+                "BOS = trend continuation confirmed. CHoCH = early warning of trend flip. "
+                "Use to determine macro bias before selecting entry direction. "
+                "Multi-timeframe: call on D1 for bias, H4 for structure, H1 for entry."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 3600=1h, 14400=4h, 86400=1D",
+                        "default": 14400,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count":   {"type": "integer", "description": "Candles to scan (default 100)", "default": 100},
+                    "lookback": {"type": "integer", "description": "Swing detection sensitivity — candles each side (default 3)", "default": 3}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-liquidity-sweep",
+            description=(
+                "Liquidity sweep / stop hunt detector for a Deriv instrument. "
+                "Detects candles that wick above a prior swing high (or below a prior swing low) "
+                "then close back inside — classic institutional stop-hunt pattern. "
+                "A bearish sweep above resistance = sell signal (stops cleared, reversal likely). "
+                "A bullish sweep below support = buy signal (stops cleared, reversal likely). "
+                "Most high-probability entries occur RIGHT AFTER a confirmed sweep."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count":   {"type": "integer", "description": "Candles to scan (default 100)", "default": 100},
+                    "lookback": {"type": "integer", "description": "Prior candles to define swing level (default 20)", "default": 20}
+                },
+                "required": ["symbol"]
+            }
+        ),
+
+        # ── Tier 3: Precision Timing & Context ────────────────────────────────
+        Tool(
+            name="deriv-session-levels",
+            description=(
+                "Session OHLC levels for a Deriv instrument: "
+                "Asia (00:00-08:00 UTC), London (07:00-16:00 UTC), New York (13:00-22:00 UTC). "
+                "Session High/Low are key liquidity zones — price frequently sweeps them. "
+                "Asia range = accumulation zone. London breakout = directional bias for the day. "
+                "NY often retests London levels or extends the move. "
+                "Use session open price as intraday bias anchor."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size (max 3600=1h for session analysis)",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600]
+                    },
+                    "count": {"type": "integer", "description": "Candles to fetch (default 48 = 2 days at 1h)", "default": 48}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-prev-levels",
+            description=(
+                "Previous day/week/month OHLC levels (PDH, PDL, PDC, PWH, PWL, PMH, PML) "
+                "for a Deriv instrument. "
+                "These are the most-watched institutional reference levels. "
+                "PDH/PDL = most likely intraday targets for stop runs. "
+                "PWH/PWL = key weekly liquidity zones. "
+                "Price breaking above PDH = bullish continuation signal. "
+                "Price failing at PDH = potential rejection/reversal. "
+                "Essential for any intraday or swing trade."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "count":  {"type": "integer", "description": "Daily candles to fetch (default 60)", "default": 60}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-seasonality",
+            description=(
+                "Monthly seasonality analysis for a Deriv instrument based on historical data. "
+                "Shows average return and win rate per calendar month. "
+                "Identifies historically bullish months (e.g. Gold: Aug-Oct often strong) "
+                "and bearish months. "
+                "Use to confirm or question the macro bias — trading with seasonality improves edge. "
+                "Best with 500+ daily candles for statistical significance."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "count":  {"type": "integer", "description": "Daily candles (default 750 ≈ 3 years)", "default": 750}
+                },
+                "required": ["symbol"]
+            }
+        ),
+
+        # ── Tier 2: Macro Context ──────────────────────────────────────────────
+        Tool(
+            name="deriv-correlation",
+            description=(
+                "Pearson price & return correlation between two Deriv instruments. "
+                "Key correlations for XAUUSD: "
+                "frxEURUSD (positive ~0.7 — both move inversely to USD strength), "
+                "frxUSDJPY (negative ~-0.6 — risk-off asset divergence), "
+                "frxXAGUSD Silver (strong positive ~0.85). "
+                "Use DXY proxy: if EURUSD and GBPUSD are both falling = USD strengthening = headwind for Gold. "
+                "Correlation > 0.7 = move together. Correlation < -0.7 = move opposite. "
+                "Divergence from correlation = mean-reversion opportunity."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol_a": {"type": "string", "description": "Primary symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "symbol_b": {"type": "string", "description": "Comparison symbol e.g. frxEURUSD", "default": "frxEURUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count":  {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100},
+                    "period": {"type": "integer", "description": "Correlation window (default 20)", "default": 20}
+                },
+                "required": ["symbol_a", "symbol_b"]
             }
         ),
     ]
@@ -3154,6 +3678,436 @@ async def _dispatch(name: str, args: dict) -> str:
             f"💡 Doji-shaped HA candle = trend exhaustion / watch for reversal.",
             f"   Use HA to filter noise — combine with RSI or MACD for entry timing.",
             f"Candles: {len(candles)} ({gran_label}) | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-volume-profile ──────────────────────────────────────────────────
+    elif name == "deriv-volume-profile":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        count       = min(args.get("count", 200), 500)
+        bins        = min(args.get("bins", 20), 50)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        vp = calc_volume_profile(candles, bins=bins)
+        if not vp:
+            return "Error: Could not compute volume profile — insufficient price range."
+        current = float(candles[-1]["close"])
+        poc_dist = (current - vp["poc"]) / vp["poc"] * 100
+        in_va    = vp["val"] <= current <= vp["vah"]
+        lines = [
+            f"📊 Volume Profile — {symbol} ({gran_label}, {len(candles)} candles)",
+            f"",
+            f"── Value Area (70% of volume) ──────────────────",
+            f"  VAH (Value Area High) : {vp['vah']}",
+            f"  POC (Point of Control): {vp['poc']}  ← magnet price",
+            f"  VAL (Value Area Low)  : {vp['val']}",
+            f"",
+            f"── Current Price ───────────────────────────────",
+            f"  Price : {current}",
+            f"  vs POC: {poc_dist:+.2f}%  {'(inside value area ✓)' if in_va else '(outside value area — expect reversion to VA)'}",
+            f"",
+            f"── High Volume Nodes (HVN = strong S/R) ─────────",
+        ]
+        for h in vp["hvn_nodes"]:
+            dist = (current - h) / h * 100
+            lines.append(f"  HVN: {h}  ({dist:+.2f}% from price)")
+        lines += [f"", f"── Low Volume Nodes (LVN = fast-move zones) ──────"]
+        for l in vp["lvn_nodes"]:
+            dist = (current - l) / l * 100
+            lines.append(f"  LVN: {l}  ({dist:+.2f}% from price)")
+        lines += [
+            f"",
+            f"Price range: {vp['price_min']} — {vp['price_max']}",
+            f"",
+            f"💡 If price is below POC → expect upward pull toward POC.",
+            f"   If price is above VAH → breakout mode, next target = extension.",
+            f"   HVN = likely to slow/reverse price. LVN = price moves fast through it.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-fvg ─────────────────────────────────────────────────────────────
+    elif name == "deriv-fvg":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        count       = min(args.get("count", 150), 500)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        fvgs    = detect_fvg(candles)
+        current = float(candles[-1]["close"])
+        unfilled = [f for f in fvgs if not f["filled"]]
+        filled   = [f for f in fvgs if f["filled"]]
+        lines = [
+            f"🔲 Fair Value Gaps (FVG) — {symbol} ({gran_label})",
+            f"Total detected: {len(fvgs)}  |  Unfilled: {len(unfilled)}  |  Filled: {len(filled)}",
+            f"Current price: {current}",
+            f"",
+        ]
+        if unfilled:
+            lines.append("── Unfilled FVGs (active magnets) ──────────────────")
+            for fvg in unfilled[:8]:
+                ts   = datetime.utcfromtimestamp(fvg["epoch"]).strftime("%Y-%m-%d %H:%M")
+                dist = (current - fvg["mid"]) / fvg["mid"] * 100
+                icon = "🟢" if fvg["type"] == "bullish" else "🔴"
+                lines.append(
+                    f"  {icon} {fvg['type'].upper():8s} | {fvg['bottom']} — {fvg['top']} "
+                    f"(mid: {fvg['mid']}, size: {fvg['size']}) | {dist:+.2f}% | {ts}"
+                )
+        if filled:
+            lines += [f"", "── Filled FVGs (recent) ────────────────────────────"]
+            for fvg in filled[:4]:
+                ts   = datetime.utcfromtimestamp(fvg["epoch"]).strftime("%Y-%m-%d %H:%M")
+                icon = "🟢" if fvg["type"] == "bullish" else "🔴"
+                lines.append(f"  {icon} {fvg['type'].upper():8s} | {fvg['bottom']} — {fvg['top']} | filled ✓ | {ts}")
+        lines += [
+            f"",
+            f"💡 Bullish FVG below price = buy zone on pullback.",
+            f"   Bearish FVG above price = sell zone on rally.",
+            f"   FVG + Order Block overlap = highest-confluence entry.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-order-blocks ────────────────────────────────────────────────────
+    elif name == "deriv-order-blocks":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        count       = min(args.get("count", 150), 500)
+        lookback    = args.get("lookback", 5)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        obs     = detect_order_blocks(candles, lookback=lookback)
+        current = float(candles[-1]["close"])
+        active  = [o for o in obs if not o["mitigated"]]
+        done    = [o for o in obs if o["mitigated"]]
+        lines = [
+            f"📦 Order Blocks — {symbol} ({gran_label})",
+            f"Total detected: {len(obs)}  |  Active (unmitigated): {len(active)}  |  Mitigated: {len(done)}",
+            f"Current price: {current}",
+            f"",
+        ]
+        if active:
+            lines.append("── Active Order Blocks (price likely to return here) ──")
+            for ob in active[:6]:
+                ts   = datetime.utcfromtimestamp(ob["epoch"]).strftime("%Y-%m-%d %H:%M")
+                icon = "🟢" if ob["type"] == "bullish" else "🔴"
+                lines.append(
+                    f"  {icon} {ob['type'].upper():8s} OB | {ob['low']} — {ob['high']} "
+                    f"(mid: {ob['mid']}) | dist: {ob['distance_pct']:+.2f}% | {ts}"
+                )
+        if done:
+            lines += [f"", "── Mitigated OBs (already tested) ──────────────────"]
+            for ob in done[:4]:
+                ts   = datetime.utcfromtimestamp(ob["epoch"]).strftime("%Y-%m-%d %H:%M")
+                icon = "🟢" if ob["type"] == "bullish" else "🔴"
+                lines.append(f"  {icon} {ob['type'].upper():8s} OB | {ob['low']} — {ob['high']} | mitigated ✓ | {ts}")
+        lines += [
+            f"",
+            f"💡 Bullish OB below price = buy on retest (SL below OB low).",
+            f"   Bearish OB above price = sell on retest (SL above OB high).",
+            f"   OB + FVG confluence = premium setup.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-swing-structure ─────────────────────────────────────────────────
+    elif name == "deriv-swing-structure":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 14400)
+        count       = min(args.get("count", 100), 500)
+        lookback    = args.get("lookback", 3)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        ms = detect_swing_structure(candles, lookback=lookback)
+        if not ms:
+            return "Error: Insufficient candles for swing structure analysis."
+        struct_icon = {"bullish": "🟢", "bearish": "🔴", "neutral": "⚪"}.get(ms["structure"], "⚪")
+        lines = [
+            f"📐 Market Structure — {symbol} ({gran_label})",
+            f"",
+            f"Structure : {struct_icon} {ms['structure'].upper()}",
+            f"Current   : {ms['current_price']}",
+            f"",
+            f"── Swing Highs (last 5) ───────────────────────────",
+        ]
+        for sh in ms["swing_highs"]:
+            ts = datetime.utcfromtimestamp(sh["epoch"]).strftime("%Y-%m-%d %H:%M")
+            lines.append(f"  H: {sh['price']}  @ {ts}")
+        lines += [f"", f"── Swing Lows (last 5) ────────────────────────────"]
+        for sl in ms["swing_lows"]:
+            ts = datetime.utcfromtimestamp(sl["epoch"]).strftime("%Y-%m-%d %H:%M")
+            lines.append(f"  L: {sl['price']}  @ {ts}")
+        lines += [f"", f"── Pattern ────────────────────────────────────────"]
+        if ms["last_hh"] and ms["prev_hh"]:
+            hh_label = "HH ✓" if ms["last_hh"] > ms["prev_hh"] else "LH ⚠"
+            lines.append(f"  Highs: {ms['prev_hh']} → {ms['last_hh']}  [{hh_label}]")
+        if ms["last_hl"] and ms["prev_hl"]:
+            hl_label = "HL ✓" if ms["last_hl"] > ms["prev_hl"] else "LL ⚠"
+            lines.append(f"  Lows : {ms['prev_hl']} → {ms['last_hl']}  [{hl_label}]")
+        if ms["bos"]:
+            b = ms["bos"]
+            lines += [f"", f"  ✅ BOS ({b['direction'].upper()}): broke {b['level']} → reached {b['broken_at']}"]
+        if ms["choch"]:
+            c = ms["choch"]
+            lines += [f"", f"  ⚠️  CHoCH ({c['type']}): watch level {c['level']}"]
+        lines += [
+            f"",
+            f"💡 Bullish structure (HH+HL) = look for buy setups on pullbacks to HL.",
+            f"   Bearish structure (LH+LL) = look for sell setups on rallies to LH.",
+            f"   CHoCH = first warning of potential trend reversal.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-liquidity-sweep ─────────────────────────────────────────────────
+    elif name == "deriv-liquidity-sweep":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        count       = min(args.get("count", 100), 300)
+        lookback    = args.get("lookback", 20)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        sweeps  = detect_liquidity_sweeps(candles, lookback=lookback)
+        current = float(candles[-1]["close"])
+        lines = [
+            f"🎯 Liquidity Sweeps / Stop Hunts — {symbol} ({gran_label})",
+            f"Detected: {len(sweeps)} sweeps in last {len(candles)} candles",
+            f"Current price: {current}",
+            f"",
+        ]
+        if not sweeps:
+            lines.append("No liquidity sweeps detected in this window.")
+        else:
+            lines.append("── Recent Sweeps (newest first) ────────────────────")
+            for sw in sweeps:
+                ts   = datetime.utcfromtimestamp(sw["epoch"]).strftime("%Y-%m-%d %H:%M")
+                icon = "🔴" if sw["type"] == "bearish_sweep" else "🟢"
+                candles_ago = len(candles) - 1 - sw["idx"]
+                lines.append(
+                    f"  {icon} {sw['type'].replace('_', ' ').upper()}"
+                    f"  | swept: {sw['swept_level']}"
+                    f"  | size: {sw['sweep_size']}"
+                    f"  | {ts} ({candles_ago} candles ago)"
+                )
+                lines.append(f"     → Signal: {sw['signal']}")
+            # Most recent sweep signal
+            last = sweeps[0]
+            candles_ago = len(candles) - 1 - last["idx"]
+            lines += [
+                f"",
+                f"Latest sweep: {candles_ago} candles ago",
+                f"💡 Best entries occur 1-3 candles AFTER the sweep candle closes.",
+                f"   Combine with FVG / OB at the swept level for maximum confluence.",
+            ]
+        return "\n".join(lines)
+
+    # ── deriv-session-levels ──────────────────────────────────────────────────
+    elif name == "deriv-session-levels":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = min(args.get("granularity", 3600), 3600)
+        count       = min(args.get("count", 48), 200)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles     = await fetch_candles(symbol, granularity, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        sessions = calc_session_ohlc(candles, granularity)
+        current  = float(candles[-1]["close"])
+        now_utc  = datetime.utcnow()
+        now_h    = now_utc.hour
+        active_sess = ("new_york" if 13 <= now_h < 22 else
+                       "london" if 7 <= now_h < 16 else
+                       "asia" if now_h < 8 else "off-hours")
+        lines = [
+            f"🕐 Session OHLC Levels — {symbol} ({gran_label})",
+            f"Current price: {current}  |  UTC time: {now_utc.strftime('%H:%M')}  |  Active session: {active_sess.upper()}",
+            f"",
+        ]
+        sess_names = {"asia": "Asia (00:00-08:00 UTC)", "london": "London (07:00-16:00 UTC)", "new_york": "New York (13:00-22:00 UTC)"}
+        for sess_key, sess_label in sess_names.items():
+            s = sessions.get(sess_key)
+            active_mark = " ← ACTIVE" if sess_key == active_sess else ""
+            if s:
+                range_sz = s["high"] - s["low"]
+                lines += [
+                    f"── {sess_label}{active_mark} ─────────────────",
+                    f"  H: {s['high']}   L: {s['low']}   Range: {range_sz:.5f}",
+                    f"  O: {s['open']}   C: {s['close']}  ({s['candle_count']} candles)",
+                    f"",
+                ]
+            else:
+                lines += [f"── {sess_label}{active_mark} ─────────────────", f"  No data (session may not have started yet)", f""]
+        lines += [
+            f"💡 Asia High/Low = initial liquidity zones for London to sweep.",
+            f"   London breakout direction = bias for NY session.",
+            f"   Price trading above London open = bullish intraday bias.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-prev-levels ─────────────────────────────────────────────────────
+    elif name == "deriv-prev-levels":
+        symbol  = args.get("symbol", "frxXAUUSD")
+        count   = min(args.get("count", 60), 200)
+        candles = await fetch_candles(symbol, 86400, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        levels  = calc_prev_levels(candles)
+        current = float(candles[-1]["close"])
+        lines   = [f"📅 Previous Levels (PDH/PDL/PWH/PWL/PMH/PML) — {symbol}", f"Current price: {current}", f""]
+        if "prev_day" in levels:
+            pd = levels["prev_day"]
+            above_pdh = current > pd["high"]
+            below_pdl = current < pd["low"]
+            in_range  = pd["low"] <= current <= pd["high"]
+            status = "ABOVE PDH ↑" if above_pdh else ("BELOW PDL ↓" if below_pdl else "inside range")
+            lines += [
+                f"── Previous Day ({pd['date']}) ──────────────────────",
+                f"  PDH: {pd['high']}",
+                f"  PDC: {pd['close']}",
+                f"  PDL: {pd['low']}",
+                f"  Status: {status}",
+                f"",
+            ]
+        if "current_day" in levels:
+            cd = levels["current_day"]
+            lines += [
+                f"── Current Day ({cd['date']}) ─────────────────────",
+                f"  Today H: {cd['high']}   Today L: {cd['low']}",
+                f"  Today O: {cd['open']}   Current: {current}",
+                f"",
+            ]
+        if "prev_week" in levels:
+            pw = levels["prev_week"]
+            lines += [f"── Previous Week ─────────────────────────────────",
+                      f"  PWH: {pw['high']}   PWL: {pw['low']}", f""]
+        if "prev_month" in levels:
+            pm = levels["prev_month"]
+            lines += [f"── Previous Month ────────────────────────────────",
+                      f"  PMH: {pm['high']}   PML: {pm['low']}", f""]
+        lines += [
+            f"💡 PDH/PDL = most targeted intraday liquidity levels.",
+            f"   Break and close above PDH = bullish continuation.",
+            f"   Rejection at PDH = look for sell setup.",
+            f"   PWH/PWL = swing trader reference for weekly bias.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-seasonality ─────────────────────────────────────────────────────
+    elif name == "deriv-seasonality":
+        symbol  = args.get("symbol", "frxXAUUSD")
+        count   = min(args.get("count", 750), 2000)
+        candles = await fetch_candles(symbol, 86400, count)
+        if not candles:
+            return f"Error: No candle data returned for {symbol}"
+        sea = calc_seasonality(candles)
+        if not sea:
+            return "Error: Insufficient historical data for seasonality analysis (need 30+ daily candles)."
+        lines = [
+            f"📆 Seasonality Analysis — {symbol}",
+            f"Based on {len(candles)} daily candles ({len(sea.get('all_months', {}))} months of data)",
+            f"",
+        ]
+        if sea.get("current_month"):
+            m = sea["current_month"]
+            bias_icon = "🟢" if m["bias"] == "bullish" else ("🔴" if m["bias"] == "bearish" else "⚪")
+            lines += [
+                f"── Current Month: {m['name']} ─────────────────────────",
+                f"  Avg Return : {m['avg_ret']:+.3f}%",
+                f"  Win Rate   : {m['win_rate']:.1f}%",
+                f"  Bias       : {bias_icon} {m['bias'].upper()}",
+                f"  Samples    : {m['samples']} years",
+                f"",
+            ]
+        if sea.get("next_month"):
+            m = sea["next_month"]
+            bias_icon = "🟢" if m["bias"] == "bullish" else ("🔴" if m["bias"] == "bearish" else "⚪")
+            lines += [
+                f"── Next Month: {m['name']} ──────────────────────────────",
+                f"  Avg Return : {m['avg_ret']:+.3f}%  |  Win Rate: {m['win_rate']:.1f}%  |  {bias_icon} {m['bias'].upper()}",
+                f"",
+            ]
+        if sea.get("best_month"):
+            b = sea["best_month"]
+            w = sea["worst_month"]
+            lines += [
+                f"── Historical Extremes ──────────────────────────────",
+                f"  Best month : {b['name']} (avg {b['avg_ret']:+.3f}%, {b['win_rate']:.0f}% win rate)",
+                f"  Worst month: {w['name']} (avg {w['avg_ret']:+.3f}%, {w['win_rate']:.0f}% win rate)",
+                f"",
+            ]
+        lines += [
+            f"── All Months ───────────────────────────────────────",
+        ]
+        for m_num in sorted(sea.get("all_months", {}).keys()):
+            m = sea["all_months"][m_num]
+            icon = "🟢" if m["bias"] == "bullish" else ("🔴" if m["bias"] == "bearish" else "⚪")
+            lines.append(f"  {icon} {m['name']:3s} | {m['avg_ret']:+.3f}% | WR: {m['win_rate']:.0f}% | n={m['samples']}")
+        lines += [
+            f"",
+            f"💡 Trade WITH seasonality — it adds edge but isn't a standalone signal.",
+            f"   Bullish season + bullish structure = higher-probability long setups.",
+        ]
+        return "\n".join(lines)
+
+    # ── deriv-correlation ─────────────────────────────────────────────────────
+    elif name == "deriv-correlation":
+        symbol_a    = args.get("symbol_a", "frxXAUUSD")
+        symbol_b    = args.get("symbol_b", "frxEURUSD")
+        granularity = args.get("granularity", 3600)
+        count       = min(args.get("count", 100), 300)
+        period      = args.get("period", 20)
+        gran_label  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        candles_a, candles_b = await asyncio.gather(
+            fetch_candles(symbol_a, granularity, count),
+            fetch_candles(symbol_b, granularity, count),
+        )
+        corr = calc_correlation(candles_a, candles_b, period=period)
+        if not corr or corr.get("price_correlation") is None:
+            note = corr.get("note", "insufficient data") if corr else "insufficient data"
+            return f"Error: Could not compute correlation — {note}"
+        pc   = corr["price_correlation"]
+        rc   = corr["return_correlation"]
+        bar_len  = int(abs(pc) * 20)
+        bar_sign = "+" if pc >= 0 else "-"
+        bar      = f"[{bar_sign * bar_len}{' ' * (20 - bar_len)}]"
+        corr_icon = ("🟢" if pc > 0.4 else "🔴" if pc < -0.4 else "⚪")
+        a_price = float(candles_a[-1]["close"]) if candles_a else 0
+        b_price = float(candles_b[-1]["close"]) if candles_b else 0
+        lines = [
+            f"🔗 Correlation — {symbol_a} vs {symbol_b} ({gran_label}, {period}-bar window)",
+            f"",
+            f"  Price correlation  : {pc:+.4f}  {bar}  {corr_icon} {corr['label']}",
+            f"  Return correlation : {rc:+.4f}" if rc else "  Return correlation : N/A",
+            f"  Common candles     : {corr['common_candles']}",
+            f"",
+            f"  {symbol_a} current price: {a_price}",
+            f"  {symbol_b} current price: {b_price}",
+            f"",
+            f"── Interpretation ──────────────────────────────────",
+        ]
+        if pc > 0.7:
+            lines.append(f"  ✅ Strong positive — both tend to move in the same direction.")
+            lines.append(f"     If {symbol_b} is rising, {symbol_a} likely to follow.")
+        elif pc > 0.4:
+            lines.append(f"  📈 Moderate positive — general same-direction tendency.")
+        elif pc < -0.7:
+            lines.append(f"  ✅ Strong negative — they move opposite (classic inverse).")
+            lines.append(f"     If {symbol_b} rises, {symbol_a} likely to fall.")
+        elif pc < -0.4:
+            lines.append(f"  📉 Moderate negative — general inverse tendency.")
+        else:
+            lines.append(f"  ⚪ Weak/no correlation — these instruments move independently.")
+        lines += [
+            f"",
+            f"💡 DXY proxy: check frxEURUSD + frxGBPUSD simultaneously.",
+            f"   If both falling = USD strengthening = bearish for Gold (frxXAUUSD).",
+            f"   Correlation divergence = potential mean-reversion trade.",
         ]
         return "\n".join(lines)
 
