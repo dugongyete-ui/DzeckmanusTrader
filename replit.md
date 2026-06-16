@@ -63,7 +63,17 @@ Deriv and TradingView are **mutually exclusive** — never use both for the same
 - **Deriv MCP** → ONLY for Deriv platform instruments: Gold (`frxXAUUSD`), Silver (`frxXAGUSD`), and Forex pairs (`frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, `frxAUDUSD`, `frxUSDCAD`, `frxUSDCHF`, `frxNZDUSD`, etc.). Deriv does NOT have crypto, XRP, stocks, or indices. Symbol format: always prefix with `frx` — EURUSD → `frxEURUSD`, XAUUSD → `frxXAUUSD`.
 - **TradingView MCP** → ONLY for non-Deriv assets: all crypto (`BINANCE:BTCUSDT`, `BINANCE:ETHUSDT`, etc.), stocks (`NASDAQ:AAPL`), indices (`SP:SPX`). Do NOT use TradingView for Forex pairs or Gold/Silver.
 - **Economic Calendar MCP** → all fundamental queries: "kapan CPI?", "ada event hari ini?", news risk check before entry
-- **Sentiment MCP** → crypto Binance Futures pairs only (BTCUSDT, ETHUSDT, SOLUSDT, etc.) — NOT for Forex/Gold
+- **Sentiment MCP** → crypto Binance Futures pairs only (BTCUSDT, ETHUSDT, SOLUSDT, etc.) — NOT for Forex/Gold. **Mandatory** for any crypto analysis — L/S ratio, Open Interest, Fear & Greed are not optional when analysing crypto.
+
+### Deriv MCP — Server-Side Symbol Guard
+
+`mcp-servers/deriv/server.py` enforces a hard symbol block at `call_tool()` before any request reaches the Deriv WebSocket API:
+
+- Symbols with prefix `cry` or `crypto` → rejected (Deriv crypto pairs like `cryBTCUSD`)
+- Exchange-format symbols (`BTCUSDT`, `ETHUSDT`, `BINANCE:xxx`, `NASDAQ:xxx`, etc.) → rejected
+- Error message explicitly redirects to TradingView MCP
+
+This is the second layer of protection — the first is the routing rule in `system.py`. If the LLM ignores the routing rule, the server still blocks and returns an actionable error.
 
 ## Agent Toolkits
 
@@ -77,9 +87,19 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 
 | File | Role |
 |---|---|
-| `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format — no fixed SL/TP rules, agent decides freely |
+| `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format, conviction + invalidation mandate, sentiment-mandatory rule for crypto |
 | `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. All examples use `<placeholder>` syntax. |
-| `execution.py` | Reasoning-first execution — MUST call `message-notify-user` before AND after every tool call. For steps that require no tool calls (pure reasoning/synthesis), agent MUST still call `message-notify-user` at least once. Example shows structure only, not specific values. Agent uses real tool data, never invented numbers. |
+| `execution.py` | Reasoning-first execution with mandatory pre-signal checks, devil's advocate, cross-step memory reference, calibrated notification depth, and coherence reconciliation before summarizing |
+
+### execution.py — Key Behavioral Rules
+
+- **Notification depth** — calibrated to significance: routine findings = 1 sentence, significant or contradictory findings = 2-3 sentences. Never compress a major finding.
+- **Pre-signal checks** — before any BUY/SELL, agent MUST have checked: (1) current session quality and liquidity, (2) economic calendar for high-impact events within 4 hours. TUNGGU is always a valid conclusion.
+- **Devil's advocate** — mandatory before any final decision: agent must state the strongest argument AGAINST the trade and why it is proceeding despite it.
+- **Cross-step memory** — agent explicitly references findings from earlier steps when executing later steps. No step is treated in isolation.
+- **Coherence reconciliation** — before summarizing, agent internally checks whether findings from all steps tell a consistent story; contradictions must be resolved in the output.
+- **Conviction level** — every trading output must state HIGH / MEDIUM / LOW with a specific reason.
+- **Invalidation conditions** — every BUY/SELL output must name one or two specific, observable conditions that signal the setup has failed.
 
 After editing any prompt file, restart the **Backend API** workflow.
 
