@@ -459,7 +459,8 @@ To restart a workflow, use the Replit workflow UI or the `restart_workflow` agen
 | `EXTEND_SYSTEM_MESSAGE` | Extra instructions appended to **all** agent system prompts (planner + executor). Use for per-deployment customization without editing prompt files. |
 | `CONVERSATION_SAVE_PATH` | If set, saves raw conversation logs to disk at this path (e.g. `/tmp/conversations`). Useful for debugging. |
 | `EXTRA_HEADERS` | JSON object — extra HTTP headers sent with every LLM API request (e.g. `{"X-Custom-Header": "value"}`). |
-| `BROWSER_MAX_STEPS` | Max total tool calls across entire task before forced summarize (default: `100`). |
+| `MAX_STEPS` | Max total tool calls across entire task before forced summarize (default: `100`). |
+| `MAX_CONSECUTIVE_FAILURES` | How many consecutive failed steps before the loop skips to SUMMARIZING (default: `2`). Increase for tasks with many optional tool calls that may legitimately fail. |
 | `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP config for password reset emails. All five required to enable password reset. |
 | `GOOGLE_ANALYTICS_ID` | Google Analytics Measurement ID (e.g. `G-XXXXXXXXXX`) — sent to frontend via `/config/frontend`. |
 | `LOCAL_AUTH_EMAIL` / `LOCAL_AUTH_PASSWORD` | Hardcoded credentials when `AUTH_PROVIDER=local` (single-user mode). |

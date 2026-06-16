@@ -148,7 +148,7 @@ class PlanActFlow(BaseFlow):
         step = None
         total_steps_executed = 0
         consecutive_failures = 0
-        MAX_CONSECUTIVE_FAILURES = 2
+        MAX_CONSECUTIVE_FAILURES = settings.max_consecutive_failures
         while True:
             if self.status == AgentStatus.IDLE:
                 logger.info(f"Agent {self._agent_id} state changed from {AgentStatus.IDLE} to {AgentStatus.PLANNING}")

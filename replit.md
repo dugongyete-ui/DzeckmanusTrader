@@ -232,6 +232,7 @@ All configured in Replit Secrets / userenv:
 - `CONVERSATION_SAVE_PATH` — directory to save raw conversation logs to disk (e.g. `/tmp/conversations`)
 - `EXTRA_HEADERS` — JSON object of extra HTTP headers for every LLM request
 - `MAX_STEPS` — max total tool calls per task before forced summarize (default: `100`)
+- `MAX_CONSECUTIVE_FAILURES` — how many consecutive failed steps before loop skips to SUMMARIZING (default: `2`; increase if tasks have many optional tool calls that may legitimately fail)
 - `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` — SMTP config for password reset emails
 - `GOOGLE_ANALYTICS_ID` — Google Analytics ID (sent to frontend at startup)
 

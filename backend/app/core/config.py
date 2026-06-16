@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # Agent step limit — env var: MAX_STEPS
     max_steps: int = Field(default=100, alias="max_steps")
 
+    # How many consecutive failed steps before the loop skips to SUMMARIZING.
+    # Increase if tasks involve many optional tool calls that may legitimately fail.
+    # env var: MAX_CONSECUTIVE_FAILURES
+    max_consecutive_failures: int = Field(default=2, alias="max_consecutive_failures")
+
     # Agent behavior
     conversation_save_path: str | None = None    # dir to save conversation logs, e.g. "/tmp/conversations"
     extend_system_message: str | None = None     # extra instructions appended to all agent system prompts
