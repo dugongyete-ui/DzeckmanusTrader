@@ -1444,11 +1444,11 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="deriv-active-symbols",
-            description="List tradable symbols on Deriv. Filter by market: forex, commodities, cryptocurrency, indices.",
+            description="List tradable symbols on Deriv. Filter by market: forex, commodities, indices. Use ONLY for Forex/Gold/Silver instruments — NOT for crypto.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "market": {"type": "string", "description": "Market filter e.g. forex, commodities, cryptocurrency", "default": ""}
+                    "market": {"type": "string", "description": "Market filter e.g. forex, commodities, indices", "default": "forex"}
                 }
             }
         ),
@@ -2169,8 +2169,54 @@ async def list_tools() -> list[Tool]:
 
 # ── Tool Handlers ─────────────────────────────────────────────────────────────
 
+_BLOCKED_SYMBOL_PREFIXES = ("cry", "crypto")
+_BLOCKED_EXCHANGE_SUFFIXES = ("USDT", "BUSD", "BTC", "ETH", "USD:BTC")
+_BLOCKED_EXCHANGE_KEYWORDS = (
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
+    "ADAUSDT", "DOGEUSDT", "MATICUSDT", "AVAXUSDT",
+    "BINANCE:", "NASDAQ:", "NYSE:", "SP:", "KUCOIN:",
+)
+
+def _is_blocked_symbol(symbol: str) -> bool:
+    """Return True if the symbol is a crypto/stock exchange symbol that must not
+    be routed through Deriv MCP. Deriv Forex/Gold symbols start with 'frx' or
+    are volatility indices (R_*). Crypto on Deriv uses 'cry' prefix which is
+    also explicitly blocked per routing rules — use TradingView MCP instead."""
+    s = symbol.upper()
+    if symbol.lower().startswith(_BLOCKED_SYMBOL_PREFIXES):
+        return True
+    for kw in _BLOCKED_EXCHANGE_KEYWORDS:
+        if kw.upper() in s:
+            return True
+    return False
+
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    # Server-side symbol guard: block crypto/exchange symbols before they reach Deriv API
+    _SYMBOL_ARGS = ("symbol", "symbol_a", "symbol_b")
+    for arg_key in _SYMBOL_ARGS:
+        sym = arguments.get(arg_key, "")
+        if sym and _is_blocked_symbol(sym):
+            text = (
+                f"Error: Symbol '{sym}' is not supported by Deriv MCP. "
+                "Deriv MCP only handles Forex and Gold/Silver instruments (frxEURUSD, frxXAUUSD, etc.). "
+                "For crypto or stock analysis, use TradingView MCP instead."
+            )
+            return [TextContent(type="text", text=text)]
+
+    # Block crypto in multi-symbol tools
+    raw_symbols = arguments.get("symbols")
+    if isinstance(raw_symbols, list):
+        for sym in raw_symbols:
+            if sym and _is_blocked_symbol(sym):
+                text = (
+                    f"Error: Symbol '{sym}' in symbols list is not supported by Deriv MCP. "
+                    "Deriv MCP only handles Forex and Gold/Silver instruments. "
+                    "Remove crypto symbols from the list or use TradingView MCP for crypto."
+                )
+                return [TextContent(type="text", text=text)]
+
     try:
         text = await _dispatch(name, arguments)
     except asyncio.TimeoutError:
@@ -2278,7 +2324,7 @@ async def _dispatch(name: str, args: dict) -> str:
 
     # ── deriv_market_snapshot ─────────────────────────────────────────────────
     elif name == "deriv-market-snapshot":
-        symbols = args.get("symbols", ["frxXAUUSD","frxXAGUSD","frxEURUSD","frxGBPUSD","frxUSDJPY","cryBTCUSD"])
+        symbols = args.get("symbols", ["frxXAUUSD","frxXAGUSD","frxEURUSD","frxGBPUSD","frxUSDJPY"])
 
         async def _snapshot_one(sym: str):
             resp = await deriv_request({
