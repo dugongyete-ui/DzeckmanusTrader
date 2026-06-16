@@ -11,6 +11,7 @@ from app.domain.models.event import (
     DoneEvent,
     TitleEvent,
 )
+from langchain.messages import HumanMessage as LCHumanMessage
 from app.domain.models.plan import ExecutionStatus
 from app.domain.services.agents.planner import PlannerAgent
 from app.domain.services.agents.execution import ExecutionAgent
@@ -237,6 +238,24 @@ class PlanActFlow(BaseFlow):
                         f"Agent {self._agent_id} reached max_steps limit ({self._max_steps}), "
                         f"stopping execution to prevent infinite loop"
                     )
+                    _lang = getattr(self.plan, "language", "id") or "id"
+                    yield MessageEvent(
+                        role="assistant",
+                        message=(
+                            "I've reached the maximum number of analysis steps. "
+                            "I'll now deliver the summary based on all data collected so far."
+                            if _lang == "en" else
+                            "Batas langkah analisis tercapai. "
+                            "Saya akan menyampaikan ringkasan berdasarkan semua data yang sudah terkumpul."
+                        ),
+                    )
+                    await self.executor._ensure_memory()
+                    self.executor.memory.add_message(LCHumanMessage(content=(
+                        "[INTERNAL CONTEXT — do not reference this directly in your response]: "
+                        f"Analysis was stopped at the {self._max_steps}-step limit. "
+                        "Not all planned investigations were completed. "
+                        "Calibrate your conviction accordingly — do not present the summary as if every planned data point was collected."
+                    )))
                     self.status = AgentStatus.SUMMARIZING
                     continue
 
@@ -283,6 +302,24 @@ class PlanActFlow(BaseFlow):
                             f"Agent {self._agent_id} reached {MAX_CONSECUTIVE_FAILURES} consecutive "
                             f"step failures — skipping to SUMMARIZING to prevent retry storm"
                         )
+                        _lang = getattr(self.plan, "language", "id") or "id"
+                        yield MessageEvent(
+                            role="assistant",
+                            message=(
+                                "Several consecutive steps encountered data retrieval issues. "
+                                "I'll now summarize with the information that was successfully collected."
+                                if _lang == "en" else
+                                "Beberapa langkah berturut-turut mengalami kendala dalam mengambil data. "
+                                "Saya akan melanjutkan dengan informasi yang berhasil dikumpulkan."
+                            ),
+                        )
+                        await self.executor._ensure_memory()
+                        self.executor.memory.add_message(LCHumanMessage(content=(
+                            "[INTERNAL CONTEXT — do not reference this directly in your response]: "
+                            f"Analysis stopped after {MAX_CONSECUTIVE_FAILURES} consecutive step failures. "
+                            "Some planned data could not be retrieved. "
+                            "Be honest about any gaps in the analysis and calibrate conviction accordingly."
+                        )))
                         await self.executor.compact_memory()
                         self.status = AgentStatus.SUMMARIZING
                         continue

@@ -151,15 +151,19 @@ class ExecutionAgent(BaseAgent):
         # actually called.  When the LLM skips all tool calls and fabricates a
         # success JSON ("ghost success"), this stays False so we can retry.
         real_tools_called = False
+        # Track whether the LLM sent at least one user-visible narration
+        # (message_notify_user) during this step.  If the step ultimately fails
+        # with no narration, a fallback message is emitted so the user always
+        # knows what happened.
+        narration_sent = False
 
         try:
             async for event in self._handle_execution_events(step, content):
-                if (
-                    isinstance(event, ToolEvent)
-                    and event.status == ToolStatus.CALLING
-                    and event.tool_name != "message"
-                ):
-                    real_tools_called = True
+                if isinstance(event, ToolEvent) and event.status == ToolStatus.CALLING:
+                    if event.tool_name != "message":
+                        real_tools_called = True
+                    if event.function_name == "message_notify_user":
+                        narration_sent = True
                 yield event
         except Exception as e:
             error_str = str(e).lower()
@@ -177,13 +181,13 @@ class ExecutionAgent(BaseAgent):
         if retry_text_only:
             logger.info("Retrying execute_step without vision images")
             real_tools_called = False
+            narration_sent = False
             async for event in self._handle_execution_events(step, prompt):
-                if (
-                    isinstance(event, ToolEvent)
-                    and event.status == ToolStatus.CALLING
-                    and event.tool_name != "message"
-                ):
-                    real_tools_called = True
+                if isinstance(event, ToolEvent) and event.status == ToolStatus.CALLING:
+                    if event.tool_name != "message":
+                        real_tools_called = True
+                    if event.function_name == "message_notify_user":
+                        narration_sent = True
                 yield event
 
         # --- Case 1: LLM returned plain text with no tool calls at all ---
@@ -205,6 +209,7 @@ class ExecutionAgent(BaseAgent):
             step.error = None
             step.success = False
             real_tools_called = False
+            narration_sent = False
 
             correction_content = (
                 prompt
@@ -216,12 +221,11 @@ class ExecutionAgent(BaseAgent):
             )
             try:
                 async for event in self._handle_execution_events(step, correction_content):
-                    if (
-                        isinstance(event, ToolEvent)
-                        and event.status == ToolStatus.CALLING
-                        and event.tool_name != "message"
-                    ):
-                        real_tools_called = True
+                    if isinstance(event, ToolEvent) and event.status == ToolStatus.CALLING:
+                        if event.tool_name != "message":
+                            real_tools_called = True
+                        if event.function_name == "message_notify_user":
+                            narration_sent = True
                     yield event
             except Exception as retry_err:
                 logger.error(f"Retry of step {step.id} also raised: {retry_err}")
@@ -247,6 +251,7 @@ class ExecutionAgent(BaseAgent):
             step.result = None
             step.error = None
             step.success = False
+            narration_sent = False
 
             correction_content = (
                 prompt
@@ -259,9 +264,33 @@ class ExecutionAgent(BaseAgent):
             )
             try:
                 async for event in self._handle_execution_events(step, correction_content):
+                    if isinstance(event, ToolEvent) and event.status == ToolStatus.CALLING:
+                        if event.function_name == "message_notify_user":
+                            narration_sent = True
                     yield event
             except Exception as retry_err:
                 logger.error(f"Ghost-success retry of step {step.id} also raised: {retry_err}")
+
+        # --- Fallback: step failed with no user-visible narration at all ---
+        # If the step ends in failure and the LLM never called message_notify_user,
+        # the user sees a red step in the plan panel with no explanation.
+        # Emit a minimal notification so they always know what was attempted.
+        if not step.success and not narration_sent:
+            _lang = getattr(plan, "language", "id") or "id"
+            logger.warning(
+                f"Step {step.id} failed silently (success=False, no narration sent). "
+                "Emitting fallback notification."
+            )
+            yield MessageEvent(
+                role="assistant",
+                message=(
+                    f"⚠️ This step could not retrieve the required data and will be skipped. "
+                    f"Analysis will continue with the information already collected."
+                    if _lang == "en" else
+                    f"⚠️ Langkah ini tidak berhasil mengambil data yang diperlukan dan akan dilewati. "
+                    f"Analisis akan dilanjutkan dengan informasi yang sudah terkumpul."
+                ),
+            )
 
         step.status = ExecutionStatus.COMPLETED
 

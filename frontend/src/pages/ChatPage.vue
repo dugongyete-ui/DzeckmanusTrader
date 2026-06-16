@@ -490,7 +490,7 @@ const handleEvent = (event: AgentSSEEvent) => {
   } else if (event.event === 'step') {
     handleStepEvent(event.data as StepEventData);
   } else if (event.event === 'done') {
-    //isLoading.value = false;
+    isLoading.value = false;
   } else if (event.event === 'wait') {
     isLoading.value = false;
     isWaitingForInput.value = true;
