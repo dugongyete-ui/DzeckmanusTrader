@@ -72,7 +72,33 @@ class ExecutionAgent(BaseAgent):
                     step.error = "LLM returned a non-JSON response."
                     yield StepEvent(status=StepStatus.COMPLETED, step=step)
                     return
-                new_step = Step.model_validate(parsed_response)
+                if isinstance(parsed_response, list):
+                    # LLM returned a list (e.g. raw tool-call objects) instead of
+                    # a Step dict.  Treat the step as successfully completed and
+                    # serialise the list as the result text so the agent can
+                    # continue rather than crashing.
+                    logger.warning(
+                        "Execution agent returned a list instead of a Step dict — "
+                        "salvaging as raw result"
+                    )
+                    step.success = True
+                    step.result = json.dumps(parsed_response, ensure_ascii=False)
+                    yield StepEvent(status=StepStatus.COMPLETED, step=step)
+                    return
+                try:
+                    new_step = Step.model_validate(parsed_response)
+                except Exception as val_err:
+                    logger.warning(
+                        f"Step validation failed, salvaging as raw result: {val_err}"
+                    )
+                    step.success = True
+                    step.result = (
+                        json.dumps(parsed_response, ensure_ascii=False)
+                        if not isinstance(parsed_response, str)
+                        else parsed_response
+                    )
+                    yield StepEvent(status=StepStatus.COMPLETED, step=step)
+                    return
                 step.success = new_step.success
                 step.result = new_step.result
                 step.attachments = new_step.attachments
