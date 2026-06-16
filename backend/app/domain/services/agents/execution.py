@@ -273,24 +273,47 @@ class ExecutionAgent(BaseAgent):
 
         # --- Fallback: step failed with no user-visible narration at all ---
         # If the step ends in failure and the LLM never called message_notify_user,
-        # the user sees a red step in the plan panel with no explanation.
-        # Emit a minimal notification so they always know what was attempted.
+        # the user sees a failed step in the plan panel with no explanation.
+        # Emit a diagnostic notification that includes what was attempted and why
+        # it failed, so the user always has actionable context.
         if not step.success and not narration_sent:
             _lang = getattr(plan, "language", "id") or "id"
+
+            # Determine the most useful reason to surface
+            _error = (step.error or "").strip()
+            _step_desc = (step.description or "").strip()
+
+            # Map internal error codes to human-readable causes
+            _reason_en = _reason_id = ""
+            if "non-JSON response" in _error:
+                _reason_en = "The AI model produced a plain-text response instead of calling the required tools — this usually happens when the conversation context becomes very long."
+                _reason_id = "Model AI menghasilkan teks biasa alih-alih memanggil tools yang diperlukan — ini biasanya terjadi ketika konteks percakapan sudah terlalu panjang."
+            elif _error:
+                _reason_en = f"Recorded error: {_error}"
+                _reason_id = f"Error yang tercatat: {_error}"
+            else:
+                _reason_en = "The AI model completed the step without calling any tools and without providing an explanation."
+                _reason_id = "Model AI menyelesaikan langkah tanpa memanggil tools apapun dan tanpa memberikan penjelasan."
+
             logger.warning(
-                f"Step {step.id} failed silently (success=False, no narration sent). "
-                "Emitting fallback notification."
+                f"Step {step.id!r} failed silently (success=False, no narration). "
+                f"desc={_step_desc!r} error={_error!r}"
             )
-            yield MessageEvent(
-                role="assistant",
-                message=(
-                    f"⚠️ This step could not retrieve the required data and will be skipped. "
-                    f"Analysis will continue with the information already collected."
-                    if _lang == "en" else
-                    f"⚠️ Langkah ini tidak berhasil mengambil data yang diperlukan dan akan dilewati. "
-                    f"Analisis akan dilanjutkan dengan informasi yang sudah terkumpul."
-                ),
-            )
+
+            if _lang == "en":
+                _msg = (
+                    f"⚠️ **Step could not be completed:** {_step_desc}\n\n"
+                    f"**Reason:** {_reason_en}\n\n"
+                    f"Analysis will continue with the data already collected from other steps."
+                )
+            else:
+                _msg = (
+                    f"⚠️ **Langkah tidak dapat diselesaikan:** {_step_desc}\n\n"
+                    f"**Alasan:** {_reason_id}\n\n"
+                    f"Analisis akan dilanjutkan dengan data yang sudah terkumpul dari langkah lain."
+                )
+
+            yield MessageEvent(role="assistant", message=_msg)
 
         step.status = ExecutionStatus.COMPLETED
 
