@@ -74,9 +74,11 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 
 | File | Role |
 |---|---|
-| `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format, security rules |
-| `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. |
-| `execution.py` | Reasoning-first execution — agent explains why before each tool call, interprets results in context, sets all parameters autonomously based on current market state |
+| `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format — no fixed SL/TP rules, agent decides freely |
+| `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. All examples use `<placeholder>` syntax. |
+| `execution.py` | Reasoning-first execution — MUST call `message-notify-user` before AND after every tool call. Example shows structure only, not specific values. Agent uses real tool data, never invented numbers. |
+
+**No-hardcode rule (mandatory):** When editing any prompt file, all examples must show STRUCTURE, not CONTENT. Use `<placeholder>` syntax for any value that should come from real data. Never embed specific prices, ATR values, timeframes, or fixed parameter defaults. See `.agents/skills/no-hardcode/SKILL.md`.
 
 After editing any prompt file, restart the **Backend API** workflow.
 
@@ -88,10 +90,13 @@ The agent decides everything based on what it finds — no hardcoded rules:
 |---|---|
 | **Which indicators to use** | Agent chooses based on what it needs to understand at that moment |
 | **Which parameters to set** | Agent sets based on current volatility, timeframe, and market character |
+| **How many steps to plan** | Planner decides — 1 step for simple questions, many steps for deep analysis |
 | **How many tools to call** | Agent calls as many or as few as needed to reach conviction |
 | **How to interpret results** | Agent synthesizes in context of everything it already knows |
+| **Stop loss sizing** | Agent sizes SL to current market volatility — no fixed ATR multiplier |
+| **Take profit levels** | Agent sets as many TP levels as the setup genuinely supports — no minimum count |
 | **When to say TUNGGU** | Agent judges honestly — conflicting signals, extreme volatility, imminent news |
-| **Decision delivery** | Agent describes the market in its own words, not a regime label |
+| **Decision delivery** | Agent writes in its own voice — no fixed template, no regime labels |
 
 ## Frontend Pages & Components
 
@@ -123,7 +128,7 @@ User dengan `role = "admin"` di MongoDB bisa melihat, deactivate, dan activate u
 Jika SMTP dikonfigurasi (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_FROM`), user bisa reset password via 6-digit verification code yang dikirim ke email (TTL 5 menit, maks 3 percobaan).
 
 ### TradingView Tools Filter
-Backend memfilter tools TradingView dari ~100+ ke **27 tools spesifik** yang relevan untuk trading signal. Filter ada di `backend/app/domain/services/tools/mcp.py` (`_TRADINGVIEW_ALLOWED`).
+Backend memfilter tools TradingView dari ~100+ ke **29 tools spesifik** yang relevan untuk trading signal. Filter ada di `backend/app/domain/services/tools/mcp.py` (`_TRADINGVIEW_ALLOWED`).
 
 ## Running on Replit
 
@@ -163,7 +168,7 @@ All configured in Replit Secrets / userenv:
 - `EXTEND_SYSTEM_MESSAGE` — extra instructions appended to all agent system prompts at runtime (no prompt file edit needed)
 - `CONVERSATION_SAVE_PATH` — directory to save raw conversation logs to disk (e.g. `/tmp/conversations`)
 - `EXTRA_HEADERS` — JSON object of extra HTTP headers for every LLM request
-- `BROWSER_MAX_STEPS` — max tool calls before forced summarize (default: `100`)
+- `MAX_STEPS` — max total tool calls per task before forced summarize (default: `100`)
 - `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` — SMTP config for password reset emails
 - `GOOGLE_ANALYTICS_ID` — Google Analytics ID (sent to frontend at startup)
 

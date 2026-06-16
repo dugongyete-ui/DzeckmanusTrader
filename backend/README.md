@@ -1,322 +1,193 @@
-# AI Dzeck × Claw Backend Service
+# AI Dzeck — Backend Service
 
-English | [中文](README_zh.md)
+FastAPI backend for the AI Dzeck autonomous trading analyst platform.
 
-AI Dzeck × Claw is an intelligent conversation agent system based on FastAPI and LangChain chat models. The backend adopts Domain-Driven Design (DDD) architecture, supporting intelligent dialogue, file operations, Shell command execution, browser automation, and integrated [OpenClaw](https://github.com/anthropics/openclaw) AI assistant management (Claw).
+## Stack
 
-## Project Architecture
+| Component | Technology |
+|---|---|
+| Runtime | Python 3.12 |
+| Framework | FastAPI + Uvicorn |
+| AI Orchestration | LangChain |
+| Database ORM | Beanie (async MongoDB) |
+| Cache | Redis (async via `redis.asyncio`) |
+| Architecture | Domain-Driven Design (DDD) |
 
-The project adopts Domain-Driven Design (DDD) architecture, clearly separating the responsibilities of each layer:
+## Directory Structure
 
 ```
 backend/
 ├── app/
-│   ├── domain/          # Domain layer: contains core business logic
-│   │   ├── models/      # Domain model definitions
-│   │   ├── services/    # Domain services
-│   │   ├── external/    # External service interfaces
-│   │   └── prompts/     # Prompt templates
-│   ├── application/     # Application layer: orchestrates business processes
-│   │   ├── services/    # Application services
-│   │   └── schemas/     # Data schema definitions
-│   ├── interfaces/      # Interface layer: defines external system interfaces
-│   │   └── api/
-│   │       └── routes.py # API route definitions
-│   ├── infrastructure/  # Infrastructure layer: provides technical implementation
-│   └── main.py          # Application entry
-├── Dockerfile           # Docker configuration file
-├── pyproject.toml       # Project dependencies and metadata
-└── README.md            # Project documentation
+│   ├── domain/               # Core business logic (no external dependencies)
+│   │   ├── models/           # Domain models: Session, Message, Plan, Event
+│   │   ├── repositories/     # Repository interfaces
+│   │   ├── external/         # External service interfaces (search, etc.)
+│   │   └── services/
+│   │       ├── agents/       # Planner + ExecutionAgent (LangChain)
+│   │       ├── flows/        # Plan-Act orchestration loop (plan_act.py)
+│   │       ├── prompts/      # All agent behavior — system.py, planner.py, execution.py
+│   │       └── tools/        # MCP, search, and message toolkits
+│   ├── application/          # Use cases: auth, agent, file, token, email services
+│   ├── infrastructure/       # Technical implementations: MongoDB, Redis, search, MCP
+│   ├── interfaces/           # API routes, schemas, error handlers, DI dependencies
+│   ├── core/                 # Config (settings, env vars via Pydantic)
+│   └── main.py               # App entry — FastAPI setup, lifespan, CORS
+├── mcp-servers/              # Local MCP server scripts (NOT in backend/ — at repo root)
+├── tests/                    # Integration tests (pytest, requires running backend)
+├── pyproject.toml            # Dependencies (managed via uv)
+└── README.md
 ```
 
-## Core Features
+## Running
 
-1. **Session Management**: Create and manage conversation session instances
-2. **Real-time Conversation**: Implement real-time conversation through Server-Sent Events (SSE)
-3. **Tool Invocation**: Support for various tool calls, including:
-   - Browser automation operations (using Playwright)
-   - Shell command execution and viewing
-   - File read/write operations
-   - Web search integration
-4. **Sandbox Environment**: Use Docker containers to provide isolated execution environments
-5. **VNC Visualization**: Support remote viewing of the sandbox environment via WebSocket connection
-6. **Claw (Dzeck × Claw)**: Per-user OpenClaw container lifecycle management, chat history merge (MongoDB + OpenClaw `.jsonl` sessions), WebSocket real-time messaging, file upload/resolve, and OpenAI-compatible LLM proxy for Claw containers
-
-## Requirements
-
-- Python 3.12+
-- Docker 20.10+
-- MongoDB 4.4+
-- Redis 6.0+
-
-## Installation and Configuration
-
-1. **Install uv**:
 ```bash
-pip install uv
+# Development (Replit: use "Backend API" workflow)
+python3 -m uvicorn app.main:app --host localhost --port 8000
+
+# With reload (local dev)
+uvicorn app.main:app --host localhost --port 8000 --reload
 ```
 
-2. **Install dependencies**:
+Backend runs on port **8000**. The frontend (port 5000) proxies `/api` → `localhost:8000`.
+
+## Agent Architecture
+
+The agent uses a **Plan → Execute → Update** loop (`services/flows/plan_act.py`):
+
+```
+User message
+    ↓
+PlannerAgent         → creates a step-by-step plan (goal descriptions, no tool prescriptions)
+    ↓
+ExecutionAgent       → executes each step: reasons about what to check, calls MCP tools,
+                       interprets results, narrates live via message-notify-user
+    ↓
+Plan update          → planner revises remaining steps based on what was found
+    ↓
+Summarizer           → delivers final decision in user's language
+    ↓
+SSE stream → frontend
+```
+
+### Step count
+
+The planner decides how many steps are needed based on request complexity. There is no fixed step count. `max_steps = 100` is a safety ceiling only.
+
+### Prompt files (`services/prompts/`)
+
+| File | Role |
+|---|---|
+| `system.py` | Agent identity, full tool catalog, tool routing, decision format |
+| `planner.py` | Planning instructions — goal-oriented, step count is free |
+| `execution.py` | Execution instructions — reasoning-first, notify before+after every tool |
+
+**After editing any prompt file, restart the Backend API workflow.**
+
+**No-hardcode rule:** Examples in prompts must show STRUCTURE only (use `<placeholder>` syntax). Never embed specific prices, ATR values, indicator readings, or fixed multipliers. See `.agents/skills/no-hardcode/SKILL.md`.
+
+## MCP Servers
+
+7 MCP servers are defined in `mcp.json` (repo root) and launched as stdio subprocesses:
+
+| Server | Tools | Instruments |
+|---|---|---|
+| `time` | 4 | Session clock, forex market hours, timezone |
+| `deriv` | 33 | XAUUSD / Forex: price, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, CCI, Williams%R, Keltner, Donchian, SAR + ICT/SMC: Volume Profile, FVG, Order Blocks, Swing Structure, Liquidity Sweep, Session Levels, Prev Levels, Seasonality, Correlation |
+| `tradingview` | 29 | Crypto / Stocks / Indices |
+| `economic-calendar` | 4 | CPI, FOMC, NFP, GDP — with WIB countdown |
+| `sentiment` | 4 | Crypto Long/Short ratio, top traders, OI, Fear & Greed |
+| `mongodb` | 5 | MongoDB Atlas monitoring |
+| `redis` | 6 | Redis Cloud monitoring |
+
+TradingView tools are filtered down to 29 relevant tools via `_TRADINGVIEW_ALLOWED` in `services/tools/mcp.py`.
+
+### Adding a new MCP server
+
+1. Create `mcp-servers/<name>/server.py`
+2. Register in `mcp.json` with `"enabled": true`
+3. Add the server and its tools to `<tool_catalog>` in `system.py` — describe what each tool **measures** and what **question** it answers
+4. Add tool routing rules in `system.py` under `<tool_routing>` if needed
+5. Restart Backend API
+
+Do NOT add prescriptive rules about when to use the tools — the catalog description is enough.
+
+## Key Environment Variables
+
+Set in Replit Secrets. See `replit.md` for the full list.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `API_KEY` / `API_BASE` / `MODEL_NAME` / `MODEL_PROVIDER` | ✅ | LLM credentials |
+| `MONGODB_URI` / `MONGODB_DATABASE` | ✅ | MongoDB Atlas |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | ✅ | Redis Cloud |
+| `JWT_SECRET_KEY` / `PASSWORD_SALT` | ✅ | Auth security |
+| `AUTH_PROVIDER` | ✅ | `password` / `none` / `local` |
+| `VISION_MODEL_NAME` / `VISION_API_BASE` / `VISION_API_KEY` | Optional | Chart image analysis |
+| `PLANNER_MODEL_NAME` / `PLANNER_API_BASE` / `PLANNER_API_KEY` | Optional | Separate planning model |
+| `TAVILY_API_KEY` | Optional | Web search |
+| `TV_PROXY_BASE` | Optional | TradingView proxy (avoids geo-blocking) |
+| `EXTEND_SYSTEM_MESSAGE` | Optional | Extra instructions appended to all agent prompts at runtime |
+| `MAX_STEPS` | Optional | Max steps per task (default: 100) |
+
+## API Reference
+
+### Auth (`/api/v1/auth`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/auth/login` | ❌ | Login → access + refresh tokens |
+| `POST` | `/auth/register` | ❌ | Register → tokens |
+| `GET` | `/auth/me` | ✅ | Current user |
+| `POST` | `/auth/refresh` | ❌ | Refresh token |
+| `POST` | `/auth/logout` | ✅ | Revoke token |
+| `POST` | `/auth/change-password` | ✅ | Change password |
+| `POST` | `/auth/send-verification-code` | ❌ | Send reset code via email |
+| `POST` | `/auth/reset-password` | ❌ | Reset password with code |
+| `GET` | `/auth/user/{id}` | ✅ Admin | Get user |
+| `POST` | `/auth/user/{id}/deactivate` | ✅ Admin | Deactivate user |
+| `POST` | `/auth/user/{id}/activate` | ✅ Admin | Activate user |
+
+### Sessions (`/api/v1/sessions`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `PUT` | `/sessions` | ✅ | Create session |
+| `GET` | `/sessions` | ✅ | List sessions |
+| `GET` | `/sessions/{id}` | ✅ | Get session with event history |
+| `DELETE` | `/sessions/{id}` | ✅ | Delete session |
+| `POST` | `/sessions/{id}/chat` | ✅ | Send message → **SSE stream** |
+| `POST` | `/sessions/{id}/stop` | ✅ | Stop running session |
+| `POST` | `/sessions/{id}/share` | ✅ | Make session public |
+| `DELETE` | `/sessions/{id}/share` | ✅ | Revoke public access |
+| `GET` | `/sessions/shared/{id}` | ❌ | View shared session |
+
+The `/chat` endpoint returns an **SSE stream** with event types: `message`, `title`, `plan`, `tool`, `done`.
+
+### Files (`/api/v1/files`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/files` | ✅ | Upload file |
+| `GET` | `/files/{id}/download` | ✅ | Download file |
+| `POST` | `/files/{id}/extract` | ✅ | Extract text (PDF, DOCX, PPTX, XLSX, CSV, TXT) |
+| `POST` | `/files/{id}/signed-url` | ✅ | Temporary download URL (max 30 min) |
+| `DELETE` | `/files/{id}` | ✅ | Delete file |
+
+## Tests
+
+Tests in `backend/tests/` are integration tests that hit a **running** backend at `http://localhost:8000`.
+
 ```bash
-uv sync
+# Backend must be running first
+cd backend
+python3 -m pytest                           # all tests
+python3 -m pytest tests/test_auth_routes.py # specific file
 ```
 
-3. **Environment variable configuration**:
-Create a `.env` file and set the following environment variables:
-```
-# Model provider configuration
-API_KEY=your_api_key_here                # API key for model providers
-API_BASE=https://api.openai.com/v1       # Base URL for model API (optional for some providers)
+## Validation Workflows (Replit)
 
-# Model configuration
-MODEL_NAME=gpt-4o                        # Model name to use
-MODEL_PROVIDER=openai                    # Model provider for LangChain
-TEMPERATURE=0.7                          # Model temperature parameter
-MAX_TOKENS=2000                          # Maximum output tokens per model request
-
-# Google search configuration
-GOOGLE_SEARCH_API_KEY=                   # Google Search API key for web search functionality (optional)
-GOOGLE_SEARCH_ENGINE_ID=                 # Google custom search engine ID (optional)
-
-# Sandbox configuration
-SANDBOX_IMAGE=simpleyyt/dzeck-sandbox          # Sandbox environment Docker image
-SANDBOX_NAME_PREFIX=sandbox              # Sandbox container name prefix
-SANDBOX_TTL_MINUTES=30                   # Sandbox container time-to-live (minutes)
-SANDBOX_NETWORK=dzeck-network            # Docker network name for communication between sandbox containers
-
-# Database configuration
-MONGODB_URI=mongodb://localhost:27017    # MongoDB connection URL
-MONGODB_DATABASE=dzeck                   # MongoDB database name
-REDIS_HOST=localhost                     # Redis host
-REDIS_PORT=6379                          # Redis port
-REDIS_DB=0                               # Redis DB index
-
-# Log configuration
-LOG_LEVEL=INFO                           # Log level, options: DEBUG, INFO, WARNING, ERROR, CRITICAL
-```
-
-## Running the Service
-
-### Development Environment
-```bash
-# Start the development server (with hot reload)
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-The service will start at http://localhost:8000.
-
-### Docker Deployment
-```bash
-# Build Docker image
-docker build -t dzeck-ai-agent .
-
-# Run container
-docker run -p 8000:8000 --env-file .env -v /var/run/docker.sock:/var/run/docker.sock dzeck-ai-agent
-```
-
-> Note: If using Docker deployment, you need to mount the Docker socket so the backend can create sandbox containers.
-
-## API Documentation
-
-Base URL: `/api/v1`
-
-### 1. Create Session
-
-- **Endpoint**: `PUT /api/v1/sessions`
-- **Description**: Create a new conversation session
-- **Request Body**: None
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": {
-      "session_id": "string"
-    }
-  }
-  ```
-
-### 2. Get Session
-
-- **Endpoint**: `GET /api/v1/sessions/{session_id}`
-- **Description**: Get session information including conversation history
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": {
-      "session_id": "string",
-      "title": "string",
-      "events": []
-    }
-  }
-  ```
-
-### 3. List All Sessions
-
-- **Endpoint**: `GET /api/v1/sessions`
-- **Description**: Get list of all sessions
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": {
-      "sessions": [
-        {
-          "session_id": "string",
-          "title": "string",
-          "latest_message": "string",
-          "latest_message_at": 1234567890,
-          "status": "string",
-          "unread_message_count": 0
-        }
-      ]
-    }
-  }
-  ```
-
-### 4. Delete Session
-
-- **Endpoint**: `DELETE /api/v1/sessions/{session_id}`
-- **Description**: Delete a session
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": null
-  }
-  ```
-
-### 5. Stop Session
-
-- **Endpoint**: `POST /api/v1/sessions/{session_id}/stop`
-- **Description**: Stop an active session
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": null
-  }
-  ```
-
-### 6. Chat with Session
-
-- **Endpoint**: `POST /api/v1/sessions/{session_id}/chat`
-- **Description**: Send a message to the session and receive streaming response
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Request Body**:
-  ```json
-  {
-    "message": "User message content",
-    "timestamp": 1234567890,
-    "event_id": "optional event ID"
-  }
-  ```
-- **Response**: Server-Sent Events (SSE) stream
-- **Event Types**:
-  - `message`: Text message from assistant
-  - `title`: Session title update
-  - `plan`: Execution plan with steps
-  - `step`: Step status update
-  - `tool`: Tool invocation information
-  - `error`: Error information
-  - `done`: Conversation completion
-
-### 7. View Shell Session Content
-
-- **Endpoint**: `POST /api/v1/sessions/{session_id}/shell`
-- **Description**: View shell session output in the sandbox environment
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Request Body**:
-  ```json
-  {
-    "session_id": "shell session ID"
-  }
-  ```
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": {
-      "output": "shell output content",
-      "session_id": "shell session ID",
-      "console": [
-        {
-          "ps1": "prompt string",
-          "command": "executed command",
-          "output": "command output"
-        }
-      ]
-    }
-  }
-  ```
-
-### 8. View File Content
-
-- **Endpoint**: `POST /api/v1/sessions/{session_id}/file`
-- **Description**: View file content in the sandbox environment
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Request Body**:
-  ```json
-  {
-    "file": "file path"
-  }
-  ```
-- **Response**:
-  ```json
-  {
-    "code": 0,
-    "msg": "success",
-    "data": {
-      "content": "file content",
-      "file": "file path"
-    }
-  }
-  ```
-
-### 9. VNC Connection
-
-- **Endpoint**: `WebSocket /api/v1/sessions/{session_id}/vnc`
-- **Description**: Establish a VNC WebSocket connection to the session's sandbox environment
-- **Path Parameters**:
-  - `session_id`: Session ID
-- **Protocol**: WebSocket (binary mode)
-- **Subprotocol**: `binary`
-
-## Error Handling
-
-All APIs return responses in a unified format when errors occur:
-```json
-{
-  "code": 400,
-  "msg": "Error description",
-  "data": null
-}
-```
-
-Common error codes:
-- `400`: Request parameter error
-- `404`: Resource not found
-- `500`: Server internal error
-
-## Development Guide
-
-### Adding New Tools
-
-1. Define the tool interface in the `domain/external` directory
-2. Implement the tool functionality in the `infrastructure` layer
-3. Integrate the tool in `application/services` 
+| Workflow | Command | What it checks |
+|---|---|---|
+| `backend-syntax` | `python3 -m ast ...` | All `.py` files parse without syntax errors |
+| `backend-imports` | `python3 -c "import app..."` | All domain modules import cleanly |
+| `backend-pytest` | `pytest` | Integration tests |

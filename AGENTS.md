@@ -195,6 +195,18 @@ This design means the main model never needs multimodal capability as long as `V
 - To change **how the agent reasons** during execution (notification cadence, parameter logic, decision format) → edit `execution.py`
 - **Always restart the Backend API workflow** after any prompt change
 
+#### No-hardcode rule (mandatory before any prompt edit)
+
+Read `.agents/skills/no-hardcode/SKILL.md` before editing any prompt file. The core rules:
+
+1. **Examples show STRUCTURE, not CONTENT.** Use `<placeholder>` syntax for any value that should come from real data.
+2. **Never embed specific numbers.** No hardcoded prices, ATR values, RSI readings, lookback periods, or fixed multipliers in examples.
+3. **No fixed decision rules.** Do not prescribe a fixed SL multiplier, TP count, ATR formula, or indicator sequence.
+4. **No example trades.** If an example is needed to show reasoning style, all values must be `<placeholder>` and the example must be clearly marked as structural.
+5. **Off-topic clause.** Add "adapt freely, do not copy literally" to any illustrative examples.
+
+Violations cause the AI to anchor to example values instead of reading real market data — the most common source of hardcoded-feeling analysis.
+
 #### Notification rendering (frontend)
 
 `message-notify-user` tool events render as **text prose** inside step cards via `ToolUse.vue`:
@@ -455,10 +467,10 @@ Check the **Backend API** workflow console in Replit, or read `/tmp/logs/Backend
 Look for these log patterns to trace agent execution:
 ```
 "Agent started processing message"   → planner triggered
-"created plan with N steps"          → plan created (varies by request complexity)
-"executing step 1"                   → first step running (market read)
+"created plan with N steps"          → plan created (N varies by complexity — 1 to many)
+"executing step 1"                   → first step running
 "executing step 2"                   → deeper analysis running
-"executing step 3"                   → decision delivery (if 3-step plan)
+"executing step N"                   → later steps — count decided by planner, not preset
 "state changed ... to COMPLETED"     → analysis finished
 ```
 

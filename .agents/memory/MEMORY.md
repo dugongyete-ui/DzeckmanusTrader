@@ -3,3 +3,4 @@
 - [TradingView MCP tool audit](tv-mcp-audit.md) — all 29 tools in _TRADINGVIEW_ALLOWED verified against actual package; 3 bugs found and fixed; Yahoo Finance get_live_price blocked in Replit (graceful error).
 - [Sentiment MCP symbol normalizer](sentiment-normalizer.md) — fixed duplicate SOLUSDT check; MATICUSDT deprecated on Binance Futures (migrated to POLUSDT); normalizer now handles AVAXUSDT, DOTUSDT, POLUSDT/MATICUSDT.
 - [Backtest strategy valid names](backtest-strategies.md) — backtest_strategy tool only accepts: rsi, bollinger, macd, ema_cross, supertrend, donchian. Added to system prompt.
+- [No-hardcode prompt compliance](no-hardcode-compliance.md) — prompts fully audited; rules: examples show STRUCTURE only with <placeholder> syntax, no fixed SL multiplier, no fixed TP count, no specific prices/ATR values in examples. Violations anchor AI to example numbers.
