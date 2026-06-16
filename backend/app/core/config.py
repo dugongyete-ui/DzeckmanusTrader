@@ -75,10 +75,14 @@ class Settings(BaseSettings):
     # Google Analytics configuration
     google_analytics_id: str | None = None
 
+    # CORS configuration — comma-separated list of allowed origins, or "*" to allow all
+    # Example: ALLOWED_ORIGINS=https://yourapp.replit.app,https://yourdomain.com
+    allowed_origins: str = "*"
+
     # Auth configuration
     auth_provider: str = "password"  # "password", "none", "local"
     password_salt: str | None = None
-    password_hash_rounds: int = 10
+    password_hash_rounds: int = 100000
     password_hash_algorithm: str = "pbkdf2_sha256"
     local_auth_email: str = "admin@example.com"
     local_auth_password: str = "admin"

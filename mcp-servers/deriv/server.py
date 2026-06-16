@@ -85,6 +85,57 @@ def _sma(values: list[float], period: int) -> list[float]:
     return [sum(values[i:i+period]) / period for i in range(len(values) - period + 1)]
 
 
+def _rsi_series_incremental(closes: list[float], period: int) -> list[float]:
+    """
+    Compute full RSI series in O(n) using a single Wilder's smoothing pass.
+    Returns a list of RSI values aligned with closes[period:] (same length).
+    Replaces the O(n²) loop that called calc_rsi(closes[:end]) for each end.
+    """
+    if len(closes) < period + 1:
+        return []
+    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains  = [max(d, 0.0) for d in deltas]
+    losses = [max(-d, 0.0) for d in deltas]
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    def _val(g: float, l: float) -> float:
+        if l == 0:
+            return 100.0
+        return round(100 - 100 / (1 + g / l), 2)
+
+    result = [_val(avg_gain, avg_loss)]
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        result.append(_val(avg_gain, avg_loss))
+    return result
+
+
+def _macd_histogram_series(closes: list[float],
+                            fast: int = 12, slow: int = 26, signal: int = 9
+                            ) -> tuple[list[float], list[float]]:
+    """
+    Compute full MACD histogram series + aligned close prices in O(n) — one pass.
+    Returns (hist_series, price_series) with identical lengths, aligned by index.
+    Replaces the O(n²) loop that called calc_macd(closes[:end]) for each end.
+    """
+    if len(closes) < slow + signal:
+        return [], []
+    ema_fast  = _ema(closes, fast)
+    ema_slow  = _ema(closes, slow)
+    offset    = slow - fast
+    macd_line = [ema_fast[i + offset] - ema_slow[i] for i in range(len(ema_slow))]
+    if len(macd_line) < signal:
+        return [], []
+    sig_line    = _ema(macd_line, signal)
+    hist_series = [macd_line[i + signal - 1] - sig_line[i] for i in range(len(sig_line))]
+    # hist_series[i] aligns with closes index (slow-1) + (signal-1) + i
+    price_start  = (slow - 1) + (signal - 1)
+    price_series = closes[price_start: price_start + len(hist_series)]
+    return hist_series, price_series
+
+
 def calc_rsi(closes: list[float], period: int = 14) -> float | None:
     """Wilder's RSI. Returns latest RSI value."""
     if len(closes) < period + 1:
@@ -360,45 +411,38 @@ def calc_rsi_divergence(highs: list[float], lows: list[float],
     Detect RSI divergence (bullish / bearish).
     Bullish divergence: price makes lower low, RSI makes higher low → reversal up.
     Bearish divergence: price makes higher high, RSI makes lower high → reversal down.
-    Looks at last 3 swing points.
+    Uses _rsi_series_incremental for O(n) performance instead of O(n²).
     """
     if len(closes) < period + 20:
         return {"bullish": False, "bearish": False, "type": "none", "detail": ""}
 
-    # Calculate RSI series for last 60 candles
-    window = min(len(closes), 80)
-    rsi_series = []
-    sub = closes[-window:]
-    for end in range(period + 1, len(sub) + 1):
-        r = calc_rsi(sub[:end], period)
-        if r is not None:
-            rsi_series.append(r)
+    window     = min(len(closes), 80)
+    sub        = closes[-window:]
+    # O(n) — single Wilder smoothing pass over `sub`
+    rsi_series = _rsi_series_incremental(sub, period)
+    # rsi_series[i] aligns with sub[period + i], i.e. sub[period:]
+    price_sub  = sub[period:]
 
     if len(rsi_series) < 10:
         return {"bullish": False, "bearish": False, "type": "none", "detail": ""}
 
-    # Simple divergence: compare last 2 price lows vs RSI lows (bullish)
-    # and last 2 price highs vs RSI highs (bearish)
-    n = len(rsi_series)
-    price_sub = closes[-(n):]
-    rsi_sub   = rsi_series
-
-    # Find recent local mins in price (last 30 bars)
+    n    = len(rsi_series)   # == len(price_sub)
     look = min(30, n - 5)
+
     p_lows  = [(i, price_sub[i]) for i in range(n - look, n - 3)
-               if price_sub[i] < price_sub[i-1] and price_sub[i] < price_sub[i+1]]
+               if price_sub[i] < price_sub[i - 1] and price_sub[i] < price_sub[i + 1]]
     p_highs = [(i, price_sub[i]) for i in range(n - look, n - 3)
-               if price_sub[i] > price_sub[i-1] and price_sub[i] > price_sub[i+1]]
+               if price_sub[i] > price_sub[i - 1] and price_sub[i] > price_sub[i + 1]]
 
     bullish_div = False
     bearish_div = False
-    detail = ""
+    detail      = ""
 
     if len(p_lows) >= 2:
         i1, p1 = p_lows[-2]
         i2, p2 = p_lows[-1]
-        r1 = rsi_sub[i1] if i1 < len(rsi_sub) else None
-        r2 = rsi_sub[i2] if i2 < len(rsi_sub) else None
+        r1 = rsi_series[i1] if i1 < n else None
+        r2 = rsi_series[i2] if i2 < n else None
         if r1 and r2 and p2 < p1 and r2 > r1:
             bullish_div = True
             detail = f"Harga LL ({p1:.3f}→{p2:.3f}), RSI HL ({r1:.1f}→{r2:.1f})"
@@ -406,19 +450,13 @@ def calc_rsi_divergence(highs: list[float], lows: list[float],
     if len(p_highs) >= 2:
         i1, p1 = p_highs[-2]
         i2, p2 = p_highs[-1]
-        r1 = rsi_sub[i1] if i1 < len(rsi_sub) else None
-        r2 = rsi_sub[i2] if i2 < len(rsi_sub) else None
+        r1 = rsi_series[i1] if i1 < n else None
+        r2 = rsi_series[i2] if i2 < n else None
         if r1 and r2 and p2 > p1 and r2 < r1:
             bearish_div = True
             detail = f"Harga HH ({p1:.3f}→{p2:.3f}), RSI LH ({r1:.1f}→{r2:.1f})"
 
-    if bullish_div:
-        div_type = "bullish"
-    elif bearish_div:
-        div_type = "bearish"
-    else:
-        div_type = "none"
-
+    div_type = "bullish" if bullish_div else ("bearish" if bearish_div else "none")
     return {"bullish": bullish_div, "bearish": bearish_div, "type": div_type, "detail": detail}
 
 
@@ -428,33 +466,28 @@ def calc_macd_divergence(highs: list[float], lows: list[float],
     Detect MACD histogram divergence.
     Bullish: price LL + histogram HL → momentum diverging up.
     Bearish: price HH + histogram LH → momentum diverging down.
+    Uses _macd_histogram_series for O(n) performance instead of O(n²).
     """
     if len(closes) < 60:
         return {"bullish": False, "bearish": False, "type": "none", "detail": ""}
 
-    # Build MACD histogram series for last 60 bars
-    hist_series = []
-    price_series = []
-    for end in range(35, len(closes) + 1):
-        res = calc_macd(closes[:end], 12, 26, 9)
-        if res:
-            hist_series.append(res[2])
-            price_series.append(closes[end - 1])
+    # O(n) — single EMA pass, no per-candle calc_macd loop
+    hist_series, price_series = _macd_histogram_series(closes, 12, 26, 9)
 
     if len(hist_series) < 10:
         return {"bullish": False, "bearish": False, "type": "none", "detail": ""}
 
-    n = len(hist_series)
+    n    = len(hist_series)
     look = min(20, n - 3)
 
     p_lows  = [(i, price_series[i]) for i in range(n - look, n - 2)
-               if price_series[i] < price_series[i-1] and price_series[i] < price_series[i+1]]
+               if price_series[i] < price_series[i - 1] and price_series[i] < price_series[i + 1]]
     p_highs = [(i, price_series[i]) for i in range(n - look, n - 2)
-               if price_series[i] > price_series[i-1] and price_series[i] > price_series[i+1]]
+               if price_series[i] > price_series[i - 1] and price_series[i] > price_series[i + 1]]
 
     bullish_div = False
     bearish_div = False
-    detail = ""
+    detail      = ""
 
     if len(p_lows) >= 2:
         i1, p1 = p_lows[-2]; i2, p2 = p_lows[-1]

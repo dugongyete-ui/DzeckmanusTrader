@@ -81,10 +81,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Dzeck AI Agent", lifespan=lifespan)
 
-# Configure CORS
+# Configure CORS — restrict origins via ALLOWED_ORIGINS env var in production
+_raw_origins = settings.allowed_origins.strip()
+_cors_origins: list[str] = (
+    ["*"]
+    if _raw_origins == "*"
+    else [o.strip() for o in _raw_origins.split(",") if o.strip()]
+)
+if _cors_origins != ["*"]:
+    logger.info(f"CORS restricted to: {_cors_origins}")
+else:
+    logger.warning(
+        "CORS is open to all origins (ALLOWED_ORIGINS=*). "
+        "Set ALLOWED_ORIGINS=https://yourapp.replit.app in production."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

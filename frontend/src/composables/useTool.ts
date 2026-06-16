@@ -23,13 +23,31 @@ export function useToolInfo(tool?: Ref<ToolContent | undefined>) {
       // Strip mcp_ prefix, then strip the server name (first segment), then format nicely
       const withoutMcp = tool.value.function.replace(/^mcp_/, '');
       const firstUnderscore = withoutMcp.indexOf('_');
-      const rawToolName = firstUnderscore !== -1
+      const serverName = firstUnderscore !== -1 ? withoutMcp.substring(0, firstUnderscore) : '';
+      let rawToolName = firstUnderscore !== -1
         ? withoutMcp.substring(firstUnderscore + 1)
         : withoutMcp;
-      // Replace underscores and hyphens with spaces, then Title Case each word
+
+      // Strip redundant server prefix from tool name
+      // e.g., server="deriv", tool="deriv-rsi" → "rsi"
+      // e.g., server="sentiment", tool="sentiment-fear-greed" → "fear-greed"
+      const serverBase = serverName.split('-')[0];
+      if (serverName && rawToolName.startsWith(serverName + '-')) {
+        rawToolName = rawToolName.substring(serverName.length + 1);
+      } else if (serverBase && rawToolName.startsWith(serverBase + '-')) {
+        rawToolName = rawToolName.substring(serverBase.length + 1);
+      }
+
+      // Known trading acronyms that should stay uppercase
+      const ACRONYMS = new Set(['rsi', 'macd', 'ema', 'sma', 'atr', 'bb', 'adx', 'cci', 'sar', 'ls', 'oi', 'tp', 'sl']);
       const displayName = rawToolName
         .replace(/[-_]/g, ' ')
-        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+        .replace(/\b\w+/g, (word: string) => {
+          const lower = word.toLowerCase();
+          return ACRONYMS.has(lower)
+            ? lower.toUpperCase()
+            : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        });
 
       let functionArg = '';
       const args = tool.value.args;
