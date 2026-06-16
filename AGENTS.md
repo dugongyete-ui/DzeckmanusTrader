@@ -138,8 +138,8 @@ To add or remove a TradingView tool from the agent's available set, edit `_TRADI
 | Server | Key Tools | Instruments |
 |---|---|---|
 | `time` | `forex-market-hours`, `get-current-time`, `convert-timezone` | All — session/time checks |
-| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar`, `deriv-volume-profile`, `deriv-fvg`, `deriv-order-blocks`, `deriv-swing-structure`, `deriv-liquidity-sweep`, `deriv-session-levels`, `deriv-prev-levels`, `deriv-seasonality`, `deriv-correlation` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
-| `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_confirmation_analysis`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
+| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar`, `deriv-volume-profile`, `deriv-fvg`, `deriv-order-blocks`, `deriv-swing-structure`, `deriv-liquidity-sweep`, `deriv-session-levels`, `deriv-prev-levels`, `deriv-seasonality`, `deriv-correlation` | Gold (`frxXAUUSD`), Silver (`frxXAGUSD`), Forex pairs (`frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, etc.) — **no crypto, no XRP, no stocks/indices** |
+| `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_confirmation_analysis`, `bollinger_scan`, `backtest_strategy` | All crypto (`BINANCE:BTCUSDT`, etc.), stocks (`NASDAQ:AAPL`), indices (`SP:SPX`) — **not for Forex or Gold** |
 | `economic-calendar` | `calendar-today`, `calendar-upcoming`, `calendar-find-event`, `calendar-get-week` | All — fundamental event queries |
 | `sentiment` | `sentiment-ls-ratio`, `sentiment-top-traders`, `sentiment-open-interest`, `sentiment-fear-greed` | Crypto only — Binance Futures pairs (BTCUSDT, ETHUSDT, etc.) |
 | `mongodb` | find, aggregate, count | Signal storage and history |
@@ -147,13 +147,24 @@ To add or remove a TradingView tool from the agent's available set, edit `_TRADI
 
 ### Tool Routing Rule
 
-This is a **technical constraint**, not a strategy rule — it reflects what each data source actually provides:
+This is a **technical constraint**, not a strategy rule — it reflects what each data source actually provides. Deriv and TradingView are **mutually exclusive**: never open both for the same instrument.
 
 ```
-Deriv MCP   → ONLY for Deriv platform instruments: frxXAUUSD, frxEURUSD, frxGBPUSD, frxXAGUSD, etc.
-TradingView → Everything else: BINANCE:BTCUSDT, NASDAQ:AAPL, SP:SPX, etc.
+Deriv MCP   → ONLY for Deriv platform instruments:
+              Gold: frxXAUUSD | Silver: frxXAGUSD
+              Forex: frxEURUSD, frxGBPUSD, frxUSDJPY, frxAUDUSD, frxUSDCAD, frxUSDCHF, frxNZDUSD, etc.
+              Symbol format: always prefix with "frx" — XAUUSD → frxXAUUSD, EURUSD → frxEURUSD
+              ❌ Deriv does NOT have crypto (BTC, ETH, XRP, etc.), stocks, or indices.
+              ❌ Do NOT also open TradingView for the same Deriv instrument.
+
+TradingView → ONLY for non-Deriv assets:
+              Crypto: BINANCE:BTCUSDT, BINANCE:ETHUSDT, KUCOIN:SOLUSDT, etc.
+              Stocks: NASDAQ:AAPL, NYSE:TSLA, etc.
+              Indices: SP:SPX, FOREXCOM:SPXUSD, etc.
+              ❌ Do NOT use TradingView for Forex pairs or Gold/Silver.
+
 Sentiment   → ONLY for crypto Binance Futures pairs: BTCUSDT, ETHUSDT, SOLUSDT, etc.
-             NOT applicable to Forex or Gold.
+              ❌ NOT applicable to Forex or Gold.
 ```
 
 ### Session Status Flow

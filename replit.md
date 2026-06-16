@@ -57,8 +57,11 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 > **Limitation:** Sentiment tools only work for Binance Futures pairs (BTCUSDT, ETHUSDT, SOLUSDT, etc.). Not applicable to Forex or Gold.
 
 ### Tool Routing (Technical Constraint — Not a Strategy Rule)
-- **Deriv MCP** → `frxXAUUSD`, `frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, all `frx*` pairs
-- **TradingView MCP** → `BINANCE:BTCUSDT`, `BINANCE:ETHUSDT`, `NASDAQ:AAPL`, `SP:SPX`, all crypto/stocks/indices
+
+Deriv and TradingView are **mutually exclusive** — never use both for the same instrument:
+
+- **Deriv MCP** → ONLY for Deriv platform instruments: Gold (`frxXAUUSD`), Silver (`frxXAGUSD`), and Forex pairs (`frxEURUSD`, `frxGBPUSD`, `frxUSDJPY`, `frxAUDUSD`, `frxUSDCAD`, `frxUSDCHF`, `frxNZDUSD`, etc.). Deriv does NOT have crypto, XRP, stocks, or indices. Symbol format: always prefix with `frx` — EURUSD → `frxEURUSD`, XAUUSD → `frxXAUUSD`.
+- **TradingView MCP** → ONLY for non-Deriv assets: all crypto (`BINANCE:BTCUSDT`, `BINANCE:ETHUSDT`, etc.), stocks (`NASDAQ:AAPL`), indices (`SP:SPX`). Do NOT use TradingView for Forex pairs or Gold/Silver.
 - **Economic Calendar MCP** → all fundamental queries: "kapan CPI?", "ada event hari ini?", news risk check before entry
 - **Sentiment MCP** → crypto Binance Futures pairs only (BTCUSDT, ETHUSDT, SOLUSDT, etc.) — NOT for Forex/Gold
 
