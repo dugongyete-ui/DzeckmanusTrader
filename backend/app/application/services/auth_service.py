@@ -22,35 +22,76 @@ class AuthService:
         self.token_service = token_service
     
     def _hash_password(self, password: str) -> str:
-        """Hash password using configured algorithm"""
-        salt = self.settings.password_salt or ''
-        
-        return self._pbkdf2_sha256(password, salt)
-    
-    def _pbkdf2_sha256(self, password: str, salt: str) -> str:
-        """PBKDF2 with SHA-256 implementation"""
-        password_bytes = password.encode('utf-8')
-        salt_bytes = salt.encode('utf-8')
-        
-        # Use configured rounds
-        rounds = self.settings.password_hash_rounds or 10
-        
-        # Generate hash
-        hash_bytes = hashlib.pbkdf2_hmac('sha256', password_bytes, salt_bytes, rounds)
-        
-        # Return salt + hash as hex string
-        return salt + hash_bytes.hex()
-    
+        """Hash password using PBKDF2-SHA256.
+
+        Stored format: ``pbkdf2:{rounds}:{hash_hex}``
+        The global salt (PASSWORD_SALT) is applied but NOT stored in the hash
+        string — it is kept in config, identical to the original design.
+        """
+        salt   = self.settings.password_salt or ''
+        rounds = self.settings.password_hash_rounds or 100000
+        hash_bytes = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt.encode('utf-8'),
+            rounds,
+        )
+        return f"pbkdf2:{rounds}:{hash_bytes.hex()}"
+
+    def _pbkdf2_sha256(self, password: str, salt: str, rounds: int = None) -> str:
+        """Low-level PBKDF2-SHA256 helper (kept for internal use)."""
+        if rounds is None:
+            rounds = self.settings.password_hash_rounds or 100000
+        hash_bytes = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt.encode('utf-8'),
+            rounds,
+        )
+        return f"pbkdf2:{rounds}:{hash_bytes.hex()}"
+
     def _verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify password against hash"""
+        """Verify a password against its stored hash.
+
+        Supports two formats:
+        - **New** (``pbkdf2:{rounds}:{hash_hex}``): rounds are read from the
+          stored string, so the verification is always correct regardless of
+          the current PASSWORD_HASH_ROUNDS setting.
+        - **Legacy** (``{salt}{hash_hex}``): hash was created before this
+          format change, with 10 rounds and the salt prepended literally.
+          Verified using 10 rounds for backward-compatibility.
+        """
         if not password_hash:
             return False
-        
+
+        import hmac as _hmac
         try:
-            # Generate hash with extracted salt and compare securely
-            generated_hash = self._hash_password(password)
-            import hmac as _hmac
-            return _hmac.compare_digest(generated_hash, password_hash)
+            salt = self.settings.password_salt or ''
+
+            if password_hash.startswith('pbkdf2:'):
+                # New format — extract rounds from stored string
+                parts = password_hash.split(':', 2)
+                if len(parts) != 3:
+                    return False
+                rounds    = int(parts[1])
+                hash_bytes = hashlib.pbkdf2_hmac(
+                    'sha256',
+                    password.encode('utf-8'),
+                    salt.encode('utf-8'),
+                    rounds,
+                )
+                candidate = f"pbkdf2:{rounds}:{hash_bytes.hex()}"
+            else:
+                # Legacy format — salt was prepended to the hex digest, 10 rounds
+                hash_bytes = hashlib.pbkdf2_hmac(
+                    'sha256',
+                    password.encode('utf-8'),
+                    salt.encode('utf-8'),
+                    10,
+                )
+                candidate = salt + hash_bytes.hex()
+
+            return _hmac.compare_digest(candidate, password_hash)
         except Exception as e:
             logger.error(f"Password verification error: {e}")
             return False
