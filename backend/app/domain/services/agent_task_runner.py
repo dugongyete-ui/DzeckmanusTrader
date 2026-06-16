@@ -1,10 +1,8 @@
 from typing import Optional, AsyncGenerator, List
 import asyncio
 import logging
-import os
 from pydantic import TypeAdapter
 from app.domain.models.message import Message, VisionImage, is_vision_capable
-from app.domain.services import file_extractor
 from app.domain.models.event import (
     BaseEvent,
     ErrorEvent,
@@ -156,8 +154,6 @@ class AgentTaskRunner(TaskRunner):
                 attachments_list = event.attachments if isinstance(event, MessageEvent) and event.attachments else []
 
                 vision_images = []
-                extracted_file_blocks: list[str] = []
-                handled_file_ids: set[str] = set()
 
                 for attachment in attachments_list:
                     if not attachment.file_id:
@@ -174,34 +170,9 @@ class AgentTaskRunner(TaskRunner):
                                 content_type=ct,
                                 data=b64,
                             ))
-                            handled_file_ids.add(attachment.file_id)
                             logger.debug(f"Collected vision image for {fname} ({len(raw)} bytes)")
                         except Exception as ve:
                             logger.warning(f"Could not collect vision data for {fname}: {ve}")
-
-                    elif file_extractor.is_extractable(fname, ct):
-                        try:
-                            file_data, _ = await self._file_storage.download_file(attachment.file_id, self._user_id)
-                            raw = file_data.read()
-                            extracted = file_extractor.extract_text(raw, fname, ct)
-                            if extracted.strip():
-                                extracted_file_blocks.append(
-                                    f"<file name=\"{fname}\">\n{extracted}\n</file>"
-                                )
-                                handled_file_ids.add(attachment.file_id)
-                                logger.info(f"Server-extracted {fname} ({len(raw)} bytes → {len(extracted)} chars)")
-                        except Exception as fe:
-                            logger.warning(f"Server extraction failed for {fname}: {fe}")
-
-                if extracted_file_blocks:
-                    files_block = "\n\n".join(extracted_file_blocks)
-                    message = (
-                        f"{message}\n\n"
-                        f"[The following file(s) have been pre-extracted and are ready to analyze. "
-                        f"Use this content directly — do NOT run any extraction commands.]\n\n"
-                        f"{files_block}"
-                    )
-                    logger.info(f"Injected {len(extracted_file_blocks)} extracted file(s) into message")
 
                 message_obj = Message(
                     message=message,

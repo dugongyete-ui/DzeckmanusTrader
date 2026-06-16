@@ -63,7 +63,7 @@
         </div>
     </div>
     <!-- Hidden file input -->
-    <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect" />
+    <input ref="fileInput" type="file" multiple accept="image/*" class="hidden" @change="handleFileSelect" />
 </template>
 
 <script setup lang="ts">

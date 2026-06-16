@@ -28,21 +28,6 @@ const imageFileExtensions = [
   'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif', 'heic', 'heif',
 ];
 
-const documentFileExtensions = [
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
-];
-
-const videoFileExtensions = [
-  'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', '3gp', 'ogv',
-];
-
-const audioFileExtensions = [
-  'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus',
-];
-
-const archiveFileExtensions = [
-  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'lzma',
-];
 
 export const getFileType = (filename: string): FileType => {
   const file_extension = filename.split('.').pop()?.toLowerCase();
@@ -105,38 +90,6 @@ export const getFileTypeText = (filename: string): string => {
   // Image files
   if (imageFileExtensions.includes(file_extension)) {
     return t('Image');
-  }
-
-  // Document files
-  if (file_extension === 'pdf') {
-    return t('PDF');
-  }
-  if (['doc', 'docx'].includes(file_extension)) {
-    return t('Word');
-  }
-  if (['xls', 'xlsx'].includes(file_extension)) {
-    return t('Excel');
-  }
-  if (['ppt', 'pptx'].includes(file_extension)) {
-    return t('PowerPoint');
-  }
-  if (documentFileExtensions.includes(file_extension)) {
-    return t('Document');
-  }
-
-  // Video files
-  if (videoFileExtensions.includes(file_extension)) {
-    return t('Video');
-  }
-
-  // Audio files
-  if (audioFileExtensions.includes(file_extension)) {
-    return t('Audio');
-  }
-
-  // Archive files
-  if (archiveFileExtensions.includes(file_extension)) {
-    return t('Archive');
   }
 
   // Default
