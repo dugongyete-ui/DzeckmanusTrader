@@ -72,7 +72,25 @@ EXAMPLE — Knowledge/capability question with 0 steps (e.g. "market apa yang bi
     "steps": []
 }}
 
-EXAMPLE — Standard analysis request (e.g. "carikan entry XAUUSD sekarang"):
+EXAMPLE — Standard analysis request, 2 steps (e.g. "bagaimana kondisi EURUSD hari ini?"):
+{{
+    "message": "Saya baca kondisi EURUSD sekarang dan sampaikan keputusannya.",
+    "goal": "Membaca kondisi pasar EURUSD dan memberikan keputusan trading",
+    "title": "Kondisi EURUSD Hari Ini",
+    "language": "id",
+    "steps": [
+        {{
+            "id": "1",
+            "description": "Baca kondisi pasar EURUSD sekarang — sesi aktif, harga, volatilitas, arah tren, dan level-level kunci yang relevan saat ini."
+        }},
+        {{
+            "id": "2",
+            "description": "Sampaikan keputusan: BUY, SELL, atau TUNGGU — dengan entry, SL, TP, dan alasan yang jelas berdasarkan kondisi yang ditemukan."
+        }}
+    ]
+}}
+
+EXAMPLE — Standard analysis request, 3 steps (e.g. "carikan entry XAUUSD sekarang"):
 {{
     "message": "Baik, saya akan baca kondisi XAUUSD sekarang — mulai dari gambaran besar dulu, lalu masuk ke detail untuk cari area entry yang tepat.",
     "goal": "Menemukan posisi entry XAUUSD terbaik berdasarkan kondisi pasar aktual saat ini",

@@ -166,22 +166,49 @@ class ExecutionAgent(BaseAgent):
 
         step.status = ExecutionStatus.COMPLETED
 
+    def _extract_text_from_json(self, text: str) -> str:
+        """If LLM returned JSON wrapper instead of plain markdown, extract the text field."""
+        clean = text.strip()
+        # Strip markdown code fences if present
+        if clean.startswith("```"):
+            import re
+            m = re.search(r"```(?:json)?\s*([\s\S]*?)```", clean)
+            if m:
+                clean = m.group(1).strip()
+        if not clean.startswith("{"):
+            return text
+        try:
+            parsed = json.loads(clean)
+            if isinstance(parsed, dict):
+                extracted = parsed.get("result") or parsed.get("message")
+                if extracted and isinstance(extracted, str):
+                    return extracted
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return text
+
     async def summarize(self) -> AsyncGenerator[BaseEvent, None]:
         await self._ensure_memory()
         context = list(self.memory.get_messages())
 
         stream_context = context + [LCHumanMessage(content=SUMMARIZE_STREAM_PROMPT)]
 
+        # Collect the full response without streaming chunks yet.
+        # The execution system prompt tells the model to return JSON, so the
+        # model often returns {"success":true,"result":"..."} even in streaming
+        # mode. We post-process the full text before deciding what to emit.
         full_text = ""
         try:
             async for chunk in self._model.astream(stream_context):
                 token = chunk.content if isinstance(chunk.content, str) else ""
                 if token:
                     full_text += token
-                    yield MessageChunkEvent(content=token, done=False)
-            yield MessageChunkEvent(content="", done=True)
             if full_text:
-                yield MessageEvent(message=full_text)
+                clean_text = self._extract_text_from_json(full_text)
+                # Stream the clean text as chunks for a natural typing effect
+                yield MessageChunkEvent(content=clean_text, done=False)
+                yield MessageChunkEvent(content="", done=True)
+                yield MessageEvent(message=clean_text)
             return
         except Exception as e:
             logger.warning(f"Streaming summarize failed, falling back to JSON mode: {e}")

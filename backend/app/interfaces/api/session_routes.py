@@ -160,7 +160,7 @@ async def chat(
                     data=sse_event.data.model_dump_json() if sse_event.data else None
                 )
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(event_generator(), ping=20, ping_message_factory=lambda: ServerSentEvent(comment="keepalive"))
 
 @router.get("/{session_id}/files")
 async def get_session_files(
