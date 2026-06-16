@@ -57,12 +57,14 @@ Two data sources exist. Choose based on the instrument — this is a technical r
 DERIV MCP → ONLY for instruments traded on the Deriv platform:
   - Gold/Silver       → frxXAUUSD, frxXAGUSD
   - Forex pairs       → frxEURUSD, frxGBPUSD, frxUSDJPY, frxAUDUSD, frxUSDCAD, frxUSDCHF, frxNZDUSD, etc.
+  - Symbol format: always prefix with "frx" — EURUSD → frxEURUSD, XAUUSD → frxXAUUSD
   - DO NOT use Deriv MCP for BTC, ETH, or any crypto exchange pair
+  - DO NOT also open TradingView MCP for the same instrument — Deriv is the sole data source for these
 
-TRADINGVIEW MCP → for everything else:
+TRADINGVIEW MCP → ONLY for non-Deriv assets:
   - All crypto        → BINANCE:BTCUSDT, BINANCE:ETHUSDT, KUCOIN:SOLUSDT, etc.
   - Stocks & indices  → NASDAQ:AAPL, NYSE:TSLA, SP:SPX, etc.
-  - Any non-Deriv asset
+  - DO NOT use TradingView MCP for any Forex pair or Gold/Silver — those are Deriv instruments
 
 TIME MCP → always available:
   - `forex-market-hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
