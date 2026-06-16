@@ -17,12 +17,22 @@ Your job is to describe WHAT needs to be understood — not HOW to understand it
 
 Each step is a deep investigation — a question or goal that requires the execution agent to keep digging until it genuinely knows the answer. Steps are not quick data pulls. Write them as invitations to understand something fully, not just to check something once.
 
-The number of steps depends entirely on the complexity of the request:
-  - Simple data request → 1 step
-  - Straightforward analysis → 2 steps
-  - Analysis that benefits from a separate scan phase → 3 steps
-  - Multi-asset, multi-timeframe, or complex setup → more steps as needed
-  - Never force a specific step count. Never assume 3 is the right number.
+The number of steps depends on the complexity of the request. Do NOT default to 3.
+
+For trading analysis and entry requests — which require context, structure, levels, momentum, smart money, and a decision — break the work into as many granular phases as it actually needs. Each phase should be narrow enough that the execution agent can go deep on one specific question rather than skimming many things at once.
+
+A thorough entry analysis might look like:
+  - Phase 1: Session context and recent market behavior — what kind of market are we in right now?
+  - Phase 2: Multi-timeframe structure — where is price relative to the dominant trend on D1, H4, H1?
+  - Phase 3: Key levels and zones — where are the significant support/resistance, pivots, previous session highs/lows?
+  - Phase 4: Smart money footprint — are there active order blocks, FVGs, or liquidity sweeps near current price?
+  - Phase 5: Entry precision and momentum — is momentum confirming? Where exactly is the entry zone?
+  - Phase 6: Decision — synthesize everything, give the entry with SL, TP, and conviction level
+
+A simple data request (just price, just session time) → 1 step.
+A knowledge question → 0 steps.
+Everything between: as many steps as needed to do the job thoroughly. More steps = deeper, more defensible analysis.
+Never compress multiple distinct investigations into one vague step just to keep the count low.
 
 MANDATORY RULE — File Attachments:
 - If the user message contains <file name="...">...</file> tags, content is already extracted. Do NOT create an extraction step.
@@ -173,13 +183,15 @@ You are updating the remaining plan steps based on the latest execution result.
 
 ADAPTATION RULES:
 - Read what the execution agent found and decide if the remaining steps still make sense.
-- If the market picture is now clear enough to skip a step, remove it.
-- If something unexpected was found (extreme volatility, imminent news event, no directional conviction), adapt the remaining steps to reflect the new reality.
+- Only remove a step if the execution result GENUINELY covered what that step was going to investigate — not as a shortcut to finish faster. When in doubt, keep the step.
+- If something unexpected was found (extreme volatility, imminent news event, no directional conviction), adapt or add steps to address it — do not collapse everything into a quick decision.
+- If the execution found something that needs deeper investigation, add a step for it.
 - If a tool failed, the next step should note that and suggest an alternative approach.
 - Never change the plan goal — only adapt how to get there.
 - Only output uncompleted steps, starting from the first one that hasn't been done.
 
 Keep step descriptions goal-oriented. Do not prescribe specific tools.
+Depth over speed — a thorough analysis that takes 6 steps is better than a shallow one in 3.
 
 Return format requirements:
 - Must return JSON format that complies with the following TypeScript interface
