@@ -377,9 +377,21 @@ class MCPToolkit(BaseToolkit):
         return self._tools
 
     def get_tool(self, tool_name: str) -> Optional[MCPTool]:
-        """Return an MCPTool wrapper or None."""
+        """Return an MCPTool wrapper or None.
+
+        Performs exact match first, then a normalised fallback that treats
+        hyphens and underscores as equivalent.  Some LLM providers (e.g.
+        Qwen via OpenAI-compatible API) silently normalise hyphens to
+        underscores in tool schemas, so the name the LLM calls back with
+        may differ from the name we registered.
+        """
         if tool_name in self._tool_names:
             return MCPTool(name=tool_name, toolkit=self)
+        # Normalised fallback: swap hyphens↔underscores and try again
+        normalised = tool_name.replace('-', '_')
+        for registered in self._tool_names:
+            if registered.replace('-', '_') == normalised:
+                return MCPTool(name=registered, toolkit=self)
         return None
 
     def has_function(self, function_name: str) -> bool:

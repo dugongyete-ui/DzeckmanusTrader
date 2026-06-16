@@ -133,6 +133,17 @@ class BaseAgent(ABC):
                 tool = self.get_tool(function_name)
                 if not tool:
                     yield ErrorEvent(error=f"Unknown tool: {function_name}")
+                    # Return a ToolMessage so the LLM knows the call failed and
+                    # can adapt, rather than leaving a dangling tool_call in its
+                    # conversation history which causes confused responses.
+                    tool_responses.append(
+                        ToolMessage(
+                            tool_call_id=tool_call_id,
+                            name=function_name,
+                            content=f"Error: tool '{function_name}' is not available. "
+                                    f"Use only the tools listed in your system prompt.",
+                        )
+                    )
                     continue
 
                 # Generate event before tool call

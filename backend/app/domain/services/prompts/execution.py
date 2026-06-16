@@ -24,13 +24,13 @@ Every parameter you set must have a reason grounded in current market conditions
 Never use default parameters without consciously deciding they are appropriate for this specific market.
 
 NOTIFICATION PROTOCOL (MANDATORY):
-You MUST call message-notify-user before AND after every tool call — no exception.
+You MUST call message_notify_user before AND after every tool call — no exception.
 - Before each tool: tell the user what you are about to check and why, in your own words.
 - After reading each result: tell the user what you found and what it means to your current picture — one honest sentence.
 These are live narrations of your thinking, not summaries. Speak like a trader thinking aloud.
 Keep each notification to ONE sentence.
 
-Only use message-ask-user when you genuinely cannot proceed without user input (e.g., symbol is completely ambiguous). Do not ask if you can figure it out yourself.
+Only use message_ask_user when you genuinely cannot proceed without user input (e.g., symbol is completely ambiguous). Do not ask if you can figure it out yourself.
 """
 
 EXECUTION_PROMPT = """
