@@ -190,6 +190,71 @@ Use this catalog to decide — based on what you currently know and what you sti
     Context: Price at upper band = N-period high (breakout). Lower = N-period low.
              Period 20 = 20-candle range. Period 55 = classic Turtle breakout level.
 
+── DERIV: SMART MONEY CONCEPTS (ICT/SMC) ─────────────────────────────
+  deriv-volume-profile (symbol, granularity, count, bins)
+    Answers: Where is the institutional price gravity? Where has the most trading activity occurred?
+    Context: POC (Point of Control) = price with most volume — acts as a magnet.
+             VAH/VAL = Value Area High/Low — 70% of trading occurred inside this zone.
+             HVN (High Volume Node) = strong institutional S/R.
+             LVN (Low Volume Node) = thin zone — price moves fast through it.
+
+  deriv-fvg (symbol, granularity, count)
+    Answers: Are there unfilled Fair Value Gaps (imbalances) in the market structure?
+    Context: Bullish FVG = 3-candle gap where price jumped up leaving an unfilled zone below.
+             Bearish FVG = downside gap. Price tends to revisit and fill unfilled FVGs.
+             Unfilled FVG = high-probability entry zone when price returns to it.
+             Core to ICT/SMC methodology — combine with order blocks for confluence.
+
+  deriv-order-blocks (symbol, granularity, count, lookback)
+    Answers: Where did institutions accumulate or distribute? Are there unmitigated order blocks?
+    Context: Bullish OB = last bearish candle before a strong bullish impulse breaking structure.
+             Bearish OB = last bullish candle before a strong bearish impulse.
+             Unmitigated OB = price has not yet returned to test it — highest probability.
+             OB + FVG overlap = maximum confluence entry zone.
+
+  deriv-swing-structure (symbol, granularity, count, lookback)
+    Answers: What is the macro market structure? Is this a BOS or a CHoCH?
+    Context: HH/HL = bullish structure. LH/LL = bearish structure.
+             BOS (Break of Structure) = trend continuation confirmed.
+             CHoCH (Change of Character) = early warning of trend reversal.
+             Call on D1 for macro bias, H4 for trade structure, H1 for entry timing.
+
+  deriv-liquidity-sweep (symbol, granularity, count, lookback)
+    Answers: Has price swept liquidity above/below a key level and reversed?
+    Context: Bearish sweep = wick above prior swing high, closes back inside = stops cleared = sell.
+             Bullish sweep = wick below prior swing low, closes back inside = stops cleared = buy.
+             Highest-probability entries occur immediately after a confirmed sweep.
+             Institutions deliberately hunt retail stop levels before reversing.
+
+── DERIV: TIMING & MACRO CONTEXT ─────────────────────────────────────
+  deriv-session-levels (symbol, granularity, count)
+    Answers: What were the High/Low/Open for each session today? Where are session liquidity zones?
+    Context: Asia range = accumulation. London breakout = directional bias for the day.
+             NY often retests London session levels or extends the directional move.
+             Session High/Low = key liquidity pools frequently swept before trend continuation.
+             Session open = intraday bias anchor.
+
+  deriv-prev-levels (symbol, count)
+    Answers: Where are PDH, PDL, PDC (Previous Day High/Low/Close) and weekly/monthly equivalents?
+    Context: PDH/PDL = most-watched institutional reference levels for intraday stop runs.
+             PWH/PWL = key weekly liquidity zones for swing trades.
+             Price breaking above PDH = bullish continuation. Rejecting PDH = reversal risk.
+             Essential for any intraday or swing trade setup.
+
+  deriv-seasonality (symbol, count)
+    Answers: Does historical seasonality favor the current macro direction this month?
+    Context: Shows average return and win rate per calendar month across years of data.
+             Use to confirm or question macro bias — trading with seasonality improves edge.
+             Example: Gold historically strong Aug–Oct. Use as a macro context filter, not a signal.
+
+  deriv-correlation (symbol_a, symbol_b, granularity, count, period)
+    Answers: How closely correlated are two instruments right now? Is there a divergence?
+    Context: Correlation > 0.7 = move together. Correlation < -0.7 = move opposite.
+             XAUUSD vs EURUSD: positive ~0.7 (both inverse to USD strength).
+             XAUUSD vs USDJPY: negative ~-0.6 (risk-off divergence).
+             XAUUSD vs XAGUSD: strong positive ~0.85.
+             Divergence from expected correlation = mean-reversion opportunity.
+
 ── TRADINGVIEW TOOLS ──────────────────────────────────────────────────────────
   coin_analysis / combined_analysis
     Answers: What is the current state of this crypto/stock across key indicators?

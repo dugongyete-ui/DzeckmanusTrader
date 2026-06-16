@@ -28,7 +28,7 @@ After reading a result, the agent explains **what it means** in context.
 
 This means the agent may use RSI(9) one session and RSI(21) the next — based on what the market demands. It may use Ichimoku on a trending day and skip it entirely on a ranging day. No two analyses are identical.
 
-## MCP Servers (7 servers — ~76 tools total)
+## MCP Servers (7 servers — ~85 tools total)
 
 All servers defined in `mcp.json`, launched as stdio subprocesses.
 
@@ -37,7 +37,7 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 | **time** | 4 | Session clock, forex market hours (London/NY/Tokyo/Sydney), timezone conversion |
 | **mongodb** | 5 | MongoDB Atlas monitoring — find, count, aggregate, stats |
 | **redis** | 6 | Redis Cloud monitoring — keys, values, stats, flush |
-| **deriv** | 24 | Deriv platform: Gold (frxXAUUSD), Forex pairs — price, candles, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, CCI, Williams%R, Keltner, Donchian, Parabolic SAR, Smart Analysis, etc. |
+| **deriv** | 33 | Deriv platform: Gold (frxXAUUSD), Forex pairs — price, candles, RSI, MACD, BB, EMA, ATR, Stoch, Ichimoku, Supertrend, Fibonacci, Pivots, Heikin-Ashi, CCI, Williams%R, Keltner, Donchian, Parabolic SAR, Smart Analysis + ICT/SMC tools: Volume Profile, FVG, Order Blocks, Swing Structure, Liquidity Sweep, Session Levels, Prev Levels, Seasonality, Correlation |
 | **tradingview** | 29 | Crypto/Stocks/Indices — screener, multi-timeframe analysis, volume confirmation, backtesting, market sentiment (proxy via `TV_PROXY_BASE`) |
 | **economic-calendar** | 4 | Real-time economic calendar: CPI, FOMC, NFP, GDP, PMI, all central bank decisions — with forecast/actual/previous and WIB countdown. Source: TradingView Calendar API (60-min disk cache at `/tmp/ecocal_cache.json`) |
 | **sentiment** | 4 | Market sentiment for crypto: Long/Short Ratio, Top Trader Positioning, Open Interest, Fear & Greed Index. Data: Binance Futures API + Alternative.me. Free, no API key, real-time. |
@@ -64,7 +64,7 @@ All servers defined in `mcp.json`, launched as stdio subprocesses.
 
 ## Agent Toolkits
 
-- **MCP toolkit** — 7 servers, ~76 tools (data, indicators, sentiment, calendar, DB monitoring)
+- **MCP toolkit** — 7 servers, ~85 tools (data, indicators, ICT/SMC, sentiment, calendar, DB monitoring)
 - **Search toolkit** — Web search via Tavily for real-time news and in-depth research
 - **Message toolkit** — `message-notify-user` (live progress), `message-ask-user` (clarification)
 

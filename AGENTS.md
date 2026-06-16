@@ -138,7 +138,7 @@ To add or remove a TradingView tool from the agent's available set, edit `_TRADI
 | Server | Key Tools | Instruments |
 |---|---|---|
 | `time` | `forex-market-hours`, `get-current-time`, `convert-timezone` | All — session/time checks |
-| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
+| `deriv` | `deriv-smart-analysis`, `deriv-rsi`, `deriv-macd`, `deriv-bbands`, `deriv-ema`, `deriv-atr`, `deriv-stoch`, `deriv-technical-analysis`, `deriv-ichimoku`, `deriv-supertrend`, `deriv-fibonacci`, `deriv-pivot-points`, `deriv-cci`, `deriv-williams-r`, `deriv-heikin-ashi`, `deriv-keltner`, `deriv-donchian`, `deriv-parabolic-sar`, `deriv-volume-profile`, `deriv-fvg`, `deriv-order-blocks`, `deriv-swing-structure`, `deriv-liquidity-sweep`, `deriv-session-levels`, `deriv-prev-levels`, `deriv-seasonality`, `deriv-correlation` | XAUUSD, frxEURUSD, frxGBPUSD, all Deriv Forex |
 | `tradingview` | `coin_analysis`, `multi_timeframe_analysis`, `advanced_candle_pattern`, `volume_confirmation_analysis`, `bollinger_scan`, `backtest_strategy` | BTC, ETH, all crypto, stocks, indices |
 | `economic-calendar` | `calendar-today`, `calendar-upcoming`, `calendar-find-event`, `calendar-get-week` | All — fundamental event queries |
 | `sentiment` | `sentiment-ls-ratio`, `sentiment-top-traders`, `sentiment-open-interest`, `sentiment-fear-greed` | Crypto only — Binance Futures pairs (BTCUSDT, ETHUSDT, etc.) |
