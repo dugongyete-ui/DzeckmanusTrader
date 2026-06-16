@@ -80,18 +80,6 @@ EXECUTION MANDATE:
 - Complete this step yourself — never delegate back to the user.
 - Use the language from the user's message for all notifications and output.
 
-Return format requirements:
-- Must return JSON format that complies with the following TypeScript interface
-
-TypeScript Interface Definition:
-```typescript
-interface Response {{
-  success: boolean;       // ALMOST ALWAYS true. Only return false if every tool you tried failed AND you obtained zero useful data from any source — no structure, no levels, no indicators, nothing. Partial data, degraded data, or a single successful tool call = success: true. Returning false when you have any data is incorrect.
-  attachments: string[];  // always [] for trading analysis
-  result: string;         // what you found and what it means — your reasoning, the data, your interpretation
-}}
-```
-
 The result field must read like a trader's live thinking log — not a report. Show:
 1. WHY you called each tool (before) and WHAT IT MEANS (after reading the result)
 2. How each finding connects to and updates the picture you are building — explicitly reference what earlier steps found when it is relevant. If step 1 found RSI divergence and this step is step 3, connect your new findings to that earlier discovery. Do not treat each step as if it exists in isolation.
@@ -99,12 +87,19 @@ The result field must read like a trader's live thinking log — not a report. S
 
 Use the actual data your tools return. Do not invent or estimate values.
 
-EXAMPLE — structure of a well-formed result (values are placeholders — use real tool output):
-{{
-    "success": true,
-    "result": "<session context — when the session opened, liquidity quality>. I started with <why you chose this first tool>. Result: <what the tool actually returned>. This tells me <what it means for the current picture>.\n\n<next reasoning step — what question you still have>. I chose <tool and why — parameters justified by current conditions>. Found: <actual result>. <synthesis — does this confirm, contradict, or refine what you knew?>.\n\n<final synthesis — what the full picture looks like now, what it implies for the decision>",
-    "attachments": []
-}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY FINAL OUTPUT — THIS IS HOW YOU MUST END EVERY STEP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After your last message_notify_user call, output ONLY this JSON.
+No prose before it. No prose after it. No markdown fences (no ```). Nothing else.
+
+{{"success": true, "result": "<your full reasoning and all findings from this step>", "attachments": []}}
+
+Three rules:
+1. "success" = true if ANY tool returned useful data. Only false if EVERY tool failed AND you have ZERO data.
+2. ALL your analysis and reasoning goes inside "result" — nowhere else.
+3. The JSON closing brace }} is the last character you output. Do not write anything after it.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 User Message:
 {message}
