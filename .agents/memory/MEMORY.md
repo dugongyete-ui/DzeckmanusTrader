@@ -4,3 +4,4 @@
 - [Sentiment MCP symbol normalizer](sentiment-normalizer.md) — fixed duplicate SOLUSDT check; MATICUSDT deprecated on Binance Futures (migrated to POLUSDT); normalizer now handles AVAXUSDT, DOTUSDT, POLUSDT/MATICUSDT.
 - [Backtest strategy valid names](backtest-strategies.md) — backtest_strategy tool only accepts: rsi, bollinger, macd, ema_cross, supertrend, donchian. Added to system prompt.
 - [No-hardcode prompt compliance](no-hardcode-compliance.md) — prompts fully audited; rules: examples show STRUCTURE only with <placeholder> syntax, no fixed SL multiplier, no fixed TP count, no specific prices/ATR values in examples. Violations anchor AI to example numbers.
+- [Retry storm bug fix](retry-storm-fix.md) — intermittent stuck/looping state caused by 3 layered issues; fixed in plan_act.py (consecutive failure cap), deriv/server.py (WebSocket retry), execution.py + planner.py (failure handling guidance).

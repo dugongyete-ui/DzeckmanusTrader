@@ -35,21 +35,34 @@ app = Server("deriv-mcp")
 
 # ── Deriv WebSocket ───────────────────────────────────────────────────────────
 
-async def deriv_request(payload: dict) -> dict:
-    """Send a single request to Deriv WebSocket API and return response."""
-    async with websockets.connect(DERIV_WS_URL, open_timeout=10, close_timeout=5) as ws:
-        await ws.send(json.dumps(payload))
-        while True:
-            raw = await asyncio.wait_for(ws.recv(), timeout=15)
-            data = json.loads(raw)
-            if "error" in data:
-                return {"error": data["error"]}
-            msg_type = data.get("msg_type", "")
-            if msg_type in ("tick", "history", "ticks_history", "active_symbols",
-                            "trading_times", "asset_index", "candles"):
-                return data
-            if msg_type not in ("", None):
-                return data
+async def deriv_request(payload: dict, _retries: int = 2) -> dict:
+    """Send a single request to Deriv WebSocket API and return response.
+
+    Retries up to _retries times on transient WebSocket / timeout errors
+    to handle intermittent Deriv API latency without propagating the failure.
+    """
+    last_exc: Exception = RuntimeError("deriv_request: no attempts made")
+    for attempt in range(_retries + 1):
+        try:
+            async with websockets.connect(DERIV_WS_URL, open_timeout=10, close_timeout=5) as ws:
+                await ws.send(json.dumps(payload))
+                while True:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=15)
+                    data = json.loads(raw)
+                    if "error" in data:
+                        return {"error": data["error"]}
+                    msg_type = data.get("msg_type", "")
+                    if msg_type in ("tick", "history", "ticks_history", "active_symbols",
+                                    "trading_times", "asset_index", "candles"):
+                        return data
+                    if msg_type not in ("", None):
+                        return data
+        except (asyncio.TimeoutError, OSError, Exception) as exc:
+            last_exc = exc
+            if attempt < _retries:
+                await asyncio.sleep(2 ** attempt)
+            continue
+    raise last_exc
 
 
 async def fetch_candles(symbol: str, granularity: int, count: int) -> list[dict]:

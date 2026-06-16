@@ -147,6 +147,8 @@ class PlanActFlow(BaseFlow):
         logger.info(f"Agent {self._agent_id} started processing message: {message.message[:50]}...")
         step = None
         total_steps_executed = 0
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 2
         while True:
             if self.status == AgentStatus.IDLE:
                 logger.info(f"Agent {self._agent_id} state changed from {AgentStatus.IDLE} to {AgentStatus.PLANNING}")
@@ -265,6 +267,26 @@ class PlanActFlow(BaseFlow):
                     f"Agent {self._agent_id} completed step {step.id} "
                     f"(success={step.success}, total_executed={total_steps_executed})"
                 )
+
+                # Track consecutive failures — if too many in a row, skip to summarize
+                # to prevent the plan updater from creating an infinite retry storm.
+                if not step.success:
+                    consecutive_failures += 1
+                    logger.warning(
+                        f"Agent {self._agent_id} step {step.id} failed "
+                        f"(consecutive_failures={consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})"
+                    )
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.warning(
+                            f"Agent {self._agent_id} reached {MAX_CONSECUTIVE_FAILURES} consecutive "
+                            f"step failures — skipping to SUMMARIZING to prevent retry storm"
+                        )
+                        await self.executor.compact_memory()
+                        self.status = AgentStatus.SUMMARIZING
+                        continue
+                else:
+                    consecutive_failures = 0
+
                 await self.executor.compact_memory()
                 logger.debug(f"Agent {self._agent_id} compacted memory")
                 self.status = AgentStatus.UPDATING
