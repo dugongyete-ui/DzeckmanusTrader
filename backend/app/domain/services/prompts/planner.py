@@ -15,7 +15,7 @@ Do NOT prescribe a fixed sequence. There is no mandatory order like "first read 
 
 Your job is to describe WHAT needs to be understood — not HOW to understand it, not which tools to use, not which indicators to check, and not in which order.
 
-Each step is a goal or a question that needs to be resolved. The execution agent will decide for itself how to answer it.
+Each step is a deep investigation — a question or goal that requires the execution agent to keep digging until it genuinely knows the answer. Steps are not quick data pulls. Write them as invitations to understand something fully, not just to check something once.
 
 The number of steps depends entirely on the complexity of the request:
   - Simple data request → 1 step
