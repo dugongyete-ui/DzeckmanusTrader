@@ -63,95 +63,95 @@ interface CreatePlanResponse {{
 }}
 ```
 
-EXAMPLE — Knowledge/capability question with 0 steps (e.g. "market apa yang bisa kamu analisis?"):
+EXAMPLE — Knowledge/capability question with 0 steps:
 {{
     "message": "<your complete, natural answer here — write it in your own words as a professional trader would, based on what you actually know>",
-    "goal": "Menjawab pertanyaan kemampuan analisis",
-    "title": "Cakupan Analisis",
+    "goal": "<what this answers>",
+    "title": "<short title>",
     "language": "id",
     "steps": []
 }}
 
-EXAMPLE — Standard analysis request, 2 steps (e.g. "bagaimana kondisi EURUSD hari ini?"):
+EXAMPLE — Simple data request (1 step):
 {{
-    "message": "Saya baca kondisi EURUSD sekarang dan sampaikan keputusannya.",
-    "goal": "Membaca kondisi pasar EURUSD dan memberikan keputusan trading",
-    "title": "Kondisi EURUSD Hari Ini",
+    "message": "<brief acknowledgment of what you will do>",
+    "goal": "<what data or information is being retrieved>",
+    "title": "<short title>",
     "language": "id",
     "steps": [
         {{
             "id": "1",
-            "description": "Baca kondisi pasar EURUSD sekarang — sesi aktif, harga, volatilitas, arah tren, dan level-level kunci yang relevan saat ini."
-        }},
-        {{
-            "id": "2",
-            "description": "Sampaikan keputusan: BUY, SELL, atau TUNGGU — dengan entry, SL, TP, dan alasan yang jelas berdasarkan kondisi yang ditemukan."
+            "description": "<the single goal — what needs to be fetched or checked>"
         }}
     ]
 }}
 
-EXAMPLE — Standard analysis request, 3 steps (e.g. "carikan entry XAUUSD sekarang"):
+EXAMPLE — Standard analysis request (2 steps — when market reading and decision can be done together):
 {{
-    "message": "Baik, saya akan baca kondisi XAUUSD sekarang — mulai dari gambaran besar dulu, lalu masuk ke detail untuk cari area entry yang tepat.",
-    "goal": "Menemukan posisi entry XAUUSD terbaik berdasarkan kondisi pasar aktual saat ini",
-    "title": "Analisis Entry XAUUSD",
+    "message": "<brief acknowledgment of what you will do>",
+    "goal": "<what this analysis is trying to achieve>",
+    "title": "<short title>",
     "language": "id",
     "steps": [
         {{
             "id": "1",
-            "description": "Baca kondisi pasar XAUUSD sekarang — sesi aktif, harga terkini, seberapa volatile market, apakah ada arah yang jelas atau market sedang diam. Cek juga apakah ada event ekonomi penting dalam waktu dekat."
+            "description": "<what needs to be understood about the market before deciding>"
         }},
         {{
             "id": "2",
-            "description": "Masuk lebih dalam — temukan level-level kunci, pahami di mana price berada relatif terhadap tren besarnya, dan baca sinyal-sinyal momentum untuk menentukan apakah ini setup yang valid untuk entry."
+            "description": "<the decision and all parameters needed to act on it>"
+        }}
+    ]
+}}
+
+EXAMPLE — Standard analysis request (3 steps — when a dedicated scan phase adds value):
+{{
+    "message": "<brief acknowledgment of what you will do>",
+    "goal": "<what this analysis is trying to achieve>",
+    "title": "<short title>",
+    "language": "id",
+    "steps": [
+        {{
+            "id": "1",
+            "description": "<initial read — what to understand about market state first>"
+        }},
+        {{
+            "id": "2",
+            "description": "<deeper analysis — what to resolve before making the decision>"
         }},
         {{
             "id": "3",
-            "description": "Sampaikan keputusan: BUY, SELL, atau TUNGGU — lengkap dengan entry, stop loss, TP1, TP2, keyakinan, dan alasan yang jelas berdasarkan semua yang ditemukan."
+            "description": "<final decision with all parameters and clear reasoning>"
         }}
     ]
 }}
 
-EXAMPLE — Simple data request (e.g. "berapa harga BTCUSDT sekarang"):
+EXAMPLE — Multi-asset request (more steps as needed — one scan + one deep-dive per asset, then combined decision):
 {{
-    "message": "Saya cek harga BTCUSDT sekarang.",
-    "goal": "Mendapatkan harga terkini BTCUSDT",
-    "title": "Harga BTCUSDT",
+    "message": "<brief acknowledgment of what you will do>",
+    "goal": "<what this analysis is trying to achieve across all assets>",
+    "title": "<short title>",
     "language": "id",
     "steps": [
         {{
             "id": "1",
-            "description": "Ambil harga terkini BTCUSDT dan informasi dasar pasar saat ini."
-        }}
-    ]
-}}
-
-EXAMPLE — Multi-asset request (e.g. "analisa XAUUSD dan EURUSD"):
-{{
-    "message": "Saya akan analisa kedua aset ini — baca kondisi masing-masing, lalu bandingkan dan berikan keputusan untuk keduanya.",
-    "goal": "Menghasilkan sinyal trading untuk XAUUSD dan EURUSD berdasarkan kondisi pasar aktual",
-    "title": "Analisis XAUUSD & EURUSD",
-    "language": "id",
-    "steps": [
-        {{
-            "id": "1",
-            "description": "Baca kondisi pasar XAUUSD — sesi, harga, volatilitas, dan apakah ada arah yang jelas."
+            "description": "<read the first asset — understand its current market state>"
         }},
         {{
             "id": "2",
-            "description": "Baca kondisi pasar EURUSD — sesi, harga, volatilitas, dan apakah ada arah yang jelas."
+            "description": "<read the second asset — understand its current market state>"
         }},
         {{
             "id": "3",
-            "description": "Analisis mendalam XAUUSD — temukan level kunci, baca struktur dan momentum, tentukan setup."
+            "description": "<go deeper into the first asset — find the setup>"
         }},
         {{
             "id": "4",
-            "description": "Analisis mendalam EURUSD — temukan level kunci, baca struktur dan momentum, tentukan setup."
+            "description": "<go deeper into the second asset — find the setup>"
         }},
         {{
             "id": "5",
-            "description": "Sampaikan keputusan untuk keduanya: entry, SL, TP, dan mana yang setup-nya lebih kuat hari ini."
+            "description": "<deliver decisions for both assets with full parameters>"
         }}
     ]
 }}
@@ -194,26 +194,26 @@ interface UpdatePlanResponse {{
 }}
 ```
 
-EXAMPLE — After a scan reveals a volatile, directionless market:
+EXAMPLE — Remaining steps collapsed because the result already makes the next step clear:
 {{
     "steps": [
         {{
             "id": "2",
-            "description": "Kondisi pasar tidak mendukung entry: volatilitas tinggi dan tidak ada arah yang jelas. Periksa apakah ada event ekonomi penting yang menyebabkan kondisi ini, lalu sampaikan kepada user kenapa TUNGGU adalah keputusan yang tepat saat ini dan apa yang harus ditunggu."
+            "description": "<what still needs to be resolved or delivered, adapted to what was just found>"
         }}
     ]
 }}
 
-EXAMPLE — After a scan reveals a clear strong trend:
+EXAMPLE — Remaining steps adjusted to reflect new findings from execution:
 {{
     "steps": [
         {{
             "id": "2",
-            "description": "Tren kuat sudah terkonfirmasi dari scan. Sekarang temukan area entry yang presisi — cari zona pullback yang valid, level support/resistance terdekat, dan konfirmasi momentum. Fokus pada menentukan titik entry, SL, dan TP yang tepat."
+            "description": "<what to investigate next, shaped by what the previous step revealed>"
         }},
         {{
             "id": "3",
-            "description": "Sampaikan keputusan trading lengkap dengan semua parameter dan reasoning yang jelas."
+            "description": "<final delivery — decision and full parameters>"
         }}
     ]
 }}
