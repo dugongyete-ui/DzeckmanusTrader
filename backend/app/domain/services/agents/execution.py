@@ -205,8 +205,11 @@ class ExecutionAgent(BaseAgent):
                     full_text += token
             if full_text:
                 clean_text = self._extract_text_from_json(full_text)
-                # Stream the clean text as chunks for a natural typing effect
-                yield MessageChunkEvent(content=clean_text, done=False)
+                # Emit in small chunks so the frontend's RAF buffer creates
+                # a smooth progressive typing effect instead of a single pop-in.
+                _CHUNK = 5
+                for _i in range(0, len(clean_text), _CHUNK):
+                    yield MessageChunkEvent(content=clean_text[_i:_i + _CHUNK], done=False)
                 yield MessageChunkEvent(content="", done=True)
                 yield MessageEvent(message=clean_text)
             return

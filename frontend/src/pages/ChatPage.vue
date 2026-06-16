@@ -371,7 +371,14 @@ const handleToolEvent = (toolData: ToolEventData) => {
     ...toolData
   }
   if (lastTool.value && lastTool.value.tool_call_id === toolContent.tool_call_id) {
+    // Preserve args from CALLING event — CALLED events often arrive with empty args,
+    // which would break prose rendering for message_notify_user notifications
+    // (ToolUse.vue renders prose only when tool.args?.text is truthy).
+    const savedArgs = lastTool.value.args;
     Object.assign(lastTool.value, toolContent);
+    if (!toolContent.args || Object.keys(toolContent.args).length === 0) {
+      lastTool.value.args = savedArgs;
+    }
   } else {
     if (lastStep?.status === 'running') {
       lastStep.tools.push(toolContent);
