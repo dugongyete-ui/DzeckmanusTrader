@@ -79,7 +79,7 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 |---|---|
 | `system.py` | Agent identity, tool catalog (what each tool measures and what question it answers), tool routing, decision output format — no fixed SL/TP rules, agent decides freely |
 | `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. All examples use `<placeholder>` syntax. |
-| `execution.py` | Reasoning-first execution — MUST call `message-notify-user` before AND after every tool call. Example shows structure only, not specific values. Agent uses real tool data, never invented numbers. |
+| `execution.py` | Reasoning-first execution — MUST call `message-notify-user` before AND after every tool call. For steps that require no tool calls (pure reasoning/synthesis), agent MUST still call `message-notify-user` at least once. Example shows structure only, not specific values. Agent uses real tool data, never invented numbers. |
 
 **No-hardcode rule (mandatory):** When editing any prompt file, all examples must show STRUCTURE, not CONTENT. Use `<placeholder>` syntax for any value that should come from real data. Never embed specific prices, ATR values, timeframes, or fixed parameter defaults. See `.agents/skills/no-hardcode/SKILL.md`.
 

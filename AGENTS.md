@@ -72,8 +72,12 @@ The agent uses a **Plan → Execute → Update** loop (`backend/app/domain/servi
 1. **Planner** (`prompts/planner.py`) — decides how many steps are needed and describes the *goal* of each step, not the tools to use
 2. **Execution agent** (`prompts/execution.py`) — reads the market, reasons about what it needs to know, chooses tools and parameters autonomously, interprets results in context
 3. **Plan updater** — revises remaining steps based on what was actually found (e.g. extreme volatility reshapes the next steps)
-4. **Summarizer** — delivers the final decision to the user
+4. **Summarizer** — delivers the final decision to the user; streams response as small chunks (~5 chars) for progressive display
 5. Results stream to frontend via **SSE**
+
+**Resilience mechanisms in `plan_act.py`:**
+- `MAX_CONSECUTIVE_FAILURES = 2` — if two steps in a row fail to produce useful data, the loop jumps directly to SUMMARIZING with whatever was gathered, rather than spiralling into a retry storm
+- Planner `UPDATE_PLAN_PROMPT` instructs the updater not to re-queue goals that already failed — prevents repeated identical tool calls
 
 ### Autonomous Reasoning Model
 
@@ -93,11 +97,14 @@ After reading a result, the agent states **what it means** in context — not ju
 
 **Notification protocol (mandatory):** The agent MUST call `message-notify-user` before AND after every tool call. Before: what it is about to check and why. After: what it found and what it means. These narrations appear as live text inside step cards in the frontend — not templates, but the agent's own words as it thinks.
 
+**For pure reasoning steps (no tool calls):** The agent MUST still call `message-notify-user` at least once to narrate what it is synthesizing. A step must never appear empty to the user.
+
 This means:
 - No two analyses are identical, even for the same asset
 - The agent may call RSI(9) one day and RSI(21) the next — based on current volatility
 - The agent may use Ichimoku on a trending day and skip it entirely on a ranging day
 - The agent narrates its thinking live at every tool call, making the analysis transparent and conversational
+- Final decision / synthesis steps always show at least one notification even if no MCP tools are called
 
 ### Active Toolkits
 
@@ -224,6 +231,8 @@ Violations cause the AI to anchor to example values instead of reading real mark
 - `tool.name === 'message' && tool.args?.text` → rendered as markdown text (no chip)
 - All other tools → rendered as a clickable chip with status indicator
 - The live narration appears between tool chips as the agent works through each step
+
+**Important — args preservation (`ChatPage.vue` → `handleToolEvent`):** When a tool finishes, the backend emits a `CALLED` event with `args: {}`. The frontend must preserve the original `args` from the earlier `CALLING` event and only merge non-empty args from `CALLED`. Without this, `tool.args?.text` becomes falsy and all `message-notify-user` prose silently disappears, leaving step cards empty.
 
 ---
 
@@ -503,6 +512,10 @@ Check the **Start application** workflow console, or the browser DevTools consol
 | MCP tool returns empty / error | MCP server not running or wrong symbol format | Check `mcp.json`, verify symbol routing (Deriv vs TradingView) |
 | Agent always says TUNGGU | Genuine market uncertainty or conflicting signals — this is correct behavior | Check ATR/volatility in logs; may be a real market condition |
 | TradingView tools fail | `TV_PROXY_BASE` misconfigured or scanner.tradingview.com blocked | Set/check `TV_PROXY_BASE` env var |
+| Step cards appear empty (no chips, no text) | `CALLED` event with empty `args` overwrites notification text | Fixed in `ChatPage.vue` `handleToolEvent` — args from CALLING event are preserved |
+| Summarize phase stuck on "Berpikir…" for 30s+ then text pops in all at once | `summarize()` buffered full LLM response before emitting | Fixed in `execution.py` `summarize()` — emits 5-char chunks progressively |
+| Pure reasoning steps (no tools) show no content | Notification protocol only triggered by tool calls | Fixed in `prompts/execution.py` — added rule requiring at least one `message-notify-user` call even in tool-free steps |
+| Deriv WebSocket disconnects mid-session | Network hiccup with no retry logic | Fixed in `mcp-servers/deriv/server.py` — up to 2 retries with exponential backoff |
 
 ### Resetting State
 
