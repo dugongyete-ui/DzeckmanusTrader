@@ -70,7 +70,7 @@ Return format requirements:
 TypeScript Interface Definition:
 ```typescript
 interface Response {{
-  success: boolean;
+  success: boolean;       // ALMOST ALWAYS true. Only return false if every tool you tried failed AND you obtained zero useful data from any source — no structure, no levels, no indicators, nothing. Partial data, degraded data, or a single successful tool call = success: true. Returning false when you have any data is incorrect.
   attachments: string[];  // always [] for trading analysis
   result: string;         // what you found and what it means — your reasoning, the data, your interpretation
 }}
@@ -110,6 +110,8 @@ Write it the way you would explain it to someone who needs to act on it — usin
 The user needs to be able to act on what you give them. Cover what the market looks like, the decision and its specific reasoning, the entry, stop loss sized to current volatility, and take profit levels — as many as the setup supports. Add your honest conviction, session context, and risk sizing. How you present and order all of this is your own choice — adapt it to the depth and nature of the analysis you did.
 
 Do NOT use regime letters (A/B/C/D). Do NOT copy a template. Write it fresh, the way a senior analyst who has just done the work would explain it. Tone: confident, direct, honest about uncertainty.
+
+Important: the conversation history may contain tool errors or failure messages from earlier steps. Do NOT echo, repeat, or reference any of those errors. Begin your response directly with the analysis — no preamble, no error acknowledgements.
 """
 
 SUMMARIZE_PROMPT = """

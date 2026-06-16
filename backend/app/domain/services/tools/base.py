@@ -83,4 +83,11 @@ class BaseToolkit(LangchainBaseToolkit):
         for tool in self.tools:
             if tool.name == tool_name:
                 return tool
+        # Normalised fallback: treat hyphens and underscores as equivalent.
+        # Some LLM providers (e.g. Qwen via OpenAI-compat API) silently convert
+        # hyphens to underscores or vice-versa in tool names.
+        normalised = tool_name.replace('-', '_')
+        for tool in self.tools:
+            if tool.name.replace('-', '_') == normalised:
+                return tool
         return None
