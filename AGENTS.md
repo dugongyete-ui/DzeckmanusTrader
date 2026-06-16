@@ -215,13 +215,91 @@ This design means the main model never needs multimodal capability as long as `V
 
 #### No-hardcode rule (mandatory before any prompt edit)
 
-Read `.agents/skills/no-hardcode/SKILL.md` before editing any prompt file. The core rules:
+Full skill: `.agents/skills/no-hardcode/SKILL.md`
 
-1. **Examples show STRUCTURE, not CONTENT.** Use `<placeholder>` syntax for any value that should come from real data.
-2. **Never embed specific numbers.** No hardcoded prices, ATR values, RSI readings, lookback periods, or fixed multipliers in examples.
-3. **No fixed decision rules.** Do not prescribe a fixed SL multiplier, TP count, ATR formula, or indicator sequence.
-4. **No example trades.** If an example is needed to show reasoning style, all values must be `<placeholder>` and the example must be clearly marked as structural.
-5. **Off-topic clause.** Add "adapt freely, do not copy literally" to any illustrative examples.
+---
+
+##### Yang BOLEH di-hardcode
+
+Semua item di bawah adalah **panduan perilaku dan struktur** — bukan konten yang harus dihasilkan agent. Ini sah dan harus ada di prompt:
+
+| Kategori | Contoh konkret di kode ini |
+|---|---|
+| **Panduan perilaku** | `"MUST call message_notify_user before AND after every tool call"` |
+| **Routing tools** | `"Deriv MCP ONLY for frx* symbols; TradingView for crypto/stocks"` |
+| **Format output** | `interface Response { success: boolean; result: string; attachments: [] }` |
+| **Fallback behavior** | `"If step has no tool calls, still notify user at least once"` |
+| **Resilience rule** | `"If 2 consecutive steps fail → skip to SUMMARIZING"` |
+| **Parameter reasoning** | `"Every parameter must have a reason grounded in current market conditions"` |
+| **Schema annotation** | `"success: boolean // ALMOST ALWAYS true. Only false if zero data obtained"` |
+| **Placeholder examples** | `"result": "<your reasoning log — what you found and what it means>"` |
+| **Batasan domain** | `"Do not answer questions outside trading/finance"` |
+| **Anti-echo rule** | `"Do NOT echo error messages from conversation history in your summary"` |
+
+---
+
+##### Yang TIDAK BOLEH di-hardcode
+
+| Yang Salah | Kenapa Salah | Gantinya |
+|---|---|---|
+| Nilai spesifik di contoh: `"RSI 72.3, ADX 44.23"` | LLM anchor ke angka itu meski data nyata berbeda | `"RSI di <nilai>, ADX di <nilai>"` dengan placeholder |
+| Default parameter wajib: `"Use RSI(14) always"` | Membatasi otonomi parameter agent | `"Set period based on current volatility"` |
+| Formula SL fixed: `"SL = ATR × 1.5"` | Menghilangkan professional judgment | `"Size SL to current market volatility"` |
+| Jumlah TP fixed: `"Always give TP1, TP2, TP3"` | Memaksa struktur tanpa melihat setup | `"As many TP levels as the setup genuinely supports"` |
+| Kalimat penolakan word-for-word | Agent hanya membaca, tidak berpikir | Panduan gaya: `"Respond honestly in 1–2 sentences"` |
+| Daftar instrumen di jawaban | Duplikasi tool catalog | Arahkan agent ke tool catalog di `system.py` |
+| `success: boolean` tanpa penjelasan | LLM bebas return `false` saat data parsial | Annotasi inline: kapan `true`, kapan `false` |
+
+---
+
+##### Sebelum & Sesudah — Perubahan Nyata di Proyek Ini
+
+**1. `success` field schema (execution.py)**
+
+```python
+# SEBELUM — tidak ada guidance, LLM bebas memilih false
+"success: boolean;"
+
+# SESUDAH — behavioral guidance yang jelas
+"success: boolean;  // ALMOST ALWAYS true. Only false if every tool failed AND zero
+                    // data from any source. Partial data = success: true."
+```
+
+**2. Notification protocol (execution.py)**
+
+```python
+# SEBELUM — hanya untuk tool calls, tidak ada panduan untuk pure-reasoning steps
+"MUST call message_notify_user before AND after every tool call"
+
+# SESUDAH — mencakup semua situasi
+"MUST call message_notify_user before AND after every tool call.
+WHEN THIS STEP REQUIRES NO TOOL CALLS: still call message_notify_user at least once."
+```
+
+**3. Contoh result di prompt (execution.py)**
+
+```python
+# SEBELUM (contoh salah, tidak ada di proyek ini tapi illustratif)
+"result": "ATR = 1.82, RSI = 67, pasar bullish — saya rekomendasikan buy di 4347"
+
+# SESUDAH — hanya struktur dengan placeholder
+"result": "<session context — when session opened, liquidity>. I started with
+<why you chose this tool>. Found: <actual result>. <synthesis — what it means>."
+```
+
+**4. Summarizer prompt (execution.py)**
+
+```python
+# SEBELUM — tidak ada instruksi tentang error di history
+"Deliver the final analysis result to the user now."
+
+# SESUDAH — anti-echo rule ditambahkan
+"Deliver the final analysis result to the user now. ...
+Important: the conversation history may contain tool errors. Do NOT echo them.
+Begin directly with the analysis."
+```
+
+---
 
 Violations cause the AI to anchor to example values instead of reading real market data — the most common source of hardcoded-feeling analysis.
 

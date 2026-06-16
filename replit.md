@@ -81,9 +81,69 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 | `planner.py` | Goal-oriented planning — describes *what* needs to be understood per step, not which tools to call. Step count determined by request complexity. All examples use `<placeholder>` syntax. |
 | `execution.py` | Reasoning-first execution — MUST call `message-notify-user` before AND after every tool call. For steps that require no tool calls (pure reasoning/synthesis), agent MUST still call `message-notify-user` at least once. Example shows structure only, not specific values. Agent uses real tool data, never invented numbers. |
 
-**No-hardcode rule (mandatory):** When editing any prompt file, all examples must show STRUCTURE, not CONTENT. Use `<placeholder>` syntax for any value that should come from real data. Never embed specific prices, ATR values, timeframes, or fixed parameter defaults. See `.agents/skills/no-hardcode/SKILL.md`.
-
 After editing any prompt file, restart the **Backend API** workflow.
+
+---
+
+## No-Hardcode Rule — Wajib Dibaca Sebelum Edit Prompt
+
+Skill lengkap: `.agents/skills/no-hardcode/SKILL.md`
+
+### Yang BOLEH di-hardcode (panduan perilaku & struktur)
+
+| Kategori | Contoh yang benar |
+|---|---|
+| Panduan perilaku | `"Before each tool call, notify the user what you are about to check and why"` |
+| Aturan routing tools | `"Use Deriv MCP for frxXAUUSD, TradingView MCP for BINANCE:BTCUSDT"` |
+| Protocol wajib | `"MUST call message_notify_user before AND after every tool call"` |
+| Format output JSON | `{"success": boolean, "result": string, "attachments": []}` |
+| Fallback rule | `"If step has no tool calls, still call message_notify_user at least once"` |
+| Contoh struktur | `"result": "<analisis dalam kata-katamu sendiri>"` dengan placeholder |
+| Resilience rule | `"If 2 consecutive steps fail, skip to SUMMARIZING"` |
+| Batasan domain | `"Do not answer questions outside trading/finance"` |
+
+### Yang TIDAK BOLEH di-hardcode (konten yang harus dihasilkan AI)
+
+| Yang salah | Kenapa salah | Yang benar |
+|---|---|---|
+| `"RSI di 72 menunjukkan overbought"` di contoh prompt | LLM akan anchor ke angka 72 meski data nyata berbeda | `"RSI di <nilai yang kamu baca> menunjukkan <interpretasimu>"` |
+| `"Set RSI period = 14"` sebagai default wajib | Membatasi otonomi parameter | `"Set period berdasarkan kondisi pasar saat ini"` |
+| `"SL = ATR × 1.5"` sebagai aturan fixed | Menghilangkan judgment agent | `"Size SL berdasarkan volatilitas pasar saat ini"` |
+| Kalimat penolakan word-for-word di prompt | Agent hanya membaca, tidak berpikir | Panduan gaya: `"Respond honestly in 1-2 sentences"` |
+| Daftar instrumen di isi jawaban | Duplikasi tool catalog | Biarkan agent jawab dari tool catalog di `system.py` |
+| TP levels fixed (misal: TP1, TP2, TP3 selalu) | Memaksa jumlah TP | `"Set as many TP levels as the setup genuinely supports"` |
+
+### Sebelum & Sesudah — Contoh Nyata dari Proyek Ini
+
+**Bug yang pernah terjadi (sebelum fix):**
+```python
+# SALAH — contoh dengan nilai spesifik di prompt
+"result": "RSI 72.3, ADX 44.23 — setup bullish dengan SL di 4310"
+```
+
+**Sesudah fix:**
+```python
+# BENAR — hanya placeholder
+"result": "<session context>. I started with <why you chose this first tool>. Result: <actual tool output>. This tells me <interpretation>."
+```
+
+**Contoh lain — notification protocol:**
+```python
+# SALAH — hardcode kalimat notifikasi
+"Saya sedang memeriksa RSI untuk melihat apakah pasar overbought"
+
+# BENAR — panduan perilaku, agent pilih kata sendiri
+"Before each tool: tell the user what you are about to check and why, in your own words."
+```
+
+**Contoh lain — success field:**
+```python
+# SALAH — tidak ada penjelasan → LLM bebas return false
+"success: boolean"
+
+# BENAR — behavioral guidance yang jelas
+"success: boolean  // ALMOST ALWAYS true. Only false if zero tools returned any data."
+```
 
 ## What Autonomous Means Here
 
