@@ -1,13 +1,13 @@
 # AI Dzeck
 
-Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Stocks) in real-time. The agent operates with **full autonomous reasoning** — like a professional trader given consciousness. It reads the market from scratch, decides for itself which tools and parameters to use, and builds its analysis organically from what the data tells it. No hardcoded indicator sequences. No prescribed rules. Every analysis is a fresh, adaptive response to current market conditions.
+Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat with an AI agent that analyzes financial markets (Forex, Crypto, Gold, Stocks) in real-time. The agent operates with **full autonomous reasoning** — like a professional trader given consciousness. It reads the market from scratch, decides for itself which tools and parameters to use, and builds its analysis organically from what the data tells it. No hardcoded indicator sequences. No prescribed rules. Every analysis is a fresh, adaptive response to current market conditions.
 
 ## Architecture
 
 | Service | Stack | Port | Entry Point |
 |---|---|---|---|
 | **Frontend** | Vue 3 + TypeScript + Vite + Tailwind | 5000 | `frontend/src/main.ts` |
-| **Backend** | Python 3.12, FastAPI, LangChain, Beanie | 8000 | `backend/app/main.py` |
+| **Backend** | Python 3.12, FastAPI, LangChain (OpenAI), Beanie | 8000 | `backend/app/main.py` |
 
 **Database:** MongoDB Atlas (cloud) + Redis Cloud (Asia Southeast)
 
@@ -15,11 +15,14 @@ Autonomous AI trading analyst platform built with FastAPI + Vue 3. Users chat wi
 
 The agent does not follow a checklist. It reasons like a professional trader:
 
-1. **Read** — understand the current market state (price, session, volatility, trend)
-2. **Think** — "what do I still need to know before I can make a decision?"
-3. **Choose** — pick the tool that answers that question; set parameters based on current conditions
-4. **Interpret** — synthesize the result with everything already known
-5. **Repeat** — until there is enough conviction to decide, or until TUNGGU is clearly right
+1. **Macro first** — check active market session (London/NY/Tokyo/Sydney) and economic calendar for HIGH IMPACT events within the next few hours. Without this, any technical signal can be a trap.
+2. **Read** — understand market structure from the top down (D1 → H4 → H1): bias, key levels, Order Blocks, Fair Value Gaps, Swing Structure.
+3. **Think** — "what do I still need to know before I can make a decision?"
+4. **Choose** — pick the tool that answers that question; set parameters based on current conditions — not from a fixed list.
+5. **Interpret** — synthesize the result with everything already known. Narrate before and after every tool call.
+6. **Repeat** — until there is enough conviction to decide, or until TUNGGU is clearly right.
+7. **Devil's advocate** — before any final decision, explicitly state the strongest argument AGAINST the trade.
+8. **Decide** — BUY / SELL / TUNGGU with specific entry zone, SL sized to current volatility, TP levels, conviction (HIGH/MEDIUM/LOW), and invalidation conditions.
 
 Before calling any tool, the agent explains **why** it needs it.
 After reading a result, the agent explains **what it means** in context.
@@ -103,6 +106,14 @@ All agent behavior is controlled by three files in `backend/app/domain/services/
 
 After editing any prompt file, restart the **Backend API** workflow.
 
+## Memory Compaction (`backend/app/domain/models/memory.py`)
+
+The `compact()` method runs after each step to keep LLM context lean. Three passes:
+
+- **Pass 1** — Strip base64 image data from HumanMessages. Chart images (~150-300 KB each) are stripped once the LLM has processed them.
+- **Pass 2** — Truncate large MCP ToolMessage results to last 3000 characters.
+- **Pass 3** — Remove intermediate tool call/result pairs from completed steps. Keeps only SystemMessage, HumanMessage, and AIMessage with real text content (narration/summaries). Removes pure tool-dispatch AIMessages (empty content) and all ToolMessages. This prevents "ghost success" where the model loses track of available tools and fabricates a completion response instead of actually calling tools.
+
 ---
 
 ## No-Hardcode Rule — Wajib Dibaca Sebelum Edit Prompt
@@ -184,22 +195,23 @@ The agent decides everything based on what it finds — no hardcoded rules:
 ## Frontend Pages & Components
 
 **Pages** (`frontend/src/pages/`):
-- `LandingPage.vue` — product landing
+- `LandingPage.vue` — product landing (6-step Cara Kerja: macro check → structure → tools → narration → devil's advocate → decision)
 - `LoginPage.vue` — JWT auth
 - `ChatPage.vue` — main analysis workspace
 - `SharePage.vue` / `ShareLayout.vue` — view shared sessions
 
 **Key Components** (`frontend/src/components/`):
 - `ChatBox.vue` / `ChatMessage.vue` — conversation interface
+- `ChatBoxFiles.vue` — image upload (restricted to `image/*` only)
 - `PlanPanel.vue` — real-time step-by-step plan visualization
 - `ToolPanel.vue` / `ToolUse.vue` / `ToolPanelContent.vue` — tool call display with formatted output
 - `LeftPanel.vue` — session navigation
-- `FilePanel.vue` / `FilePanelContent.vue` — uploaded file management
+- `FilePanel.vue` / `FilePanelContent.vue` — uploaded image management
 
 ## Features
 
-### File Upload & Extraction
-Users dapat upload file (PDF, DOCX, PPTX, XLSX, CSV, TXT, gambar) langsung dari chat. Backend melakukan **server-side text extraction** tanpa sandbox — hasil teks langsung diinjeksi ke konteks agen sebagai `<file name="...">...</file>` sehingga agen bisa membaca isinya. Chart image diproses oleh vision model lalu dikonversi ke deskripsi teks sebelum diteruskan ke execution agent.
+### Image Upload
+Users dapat upload gambar (JPG, PNG, WEBP, GIF, HEIC, dll) langsung dari chat. Backend menggunakan **vision model** (`qwen2.5-vl-72b-instruct`) untuk membaca chart image — hasilnya dikonversi ke deskripsi teks dan diinjeksi ke konteks agent. File input dibatasi ke `image/*` saja — dokumen (PDF, DOCX, XLSX, dll) tidak didukung.
 
 ### Session Sharing
 Setiap session bisa dibagikan publik via tombol "Share" di header chat. Session yang dibagikan bisa dilihat siapa saja lewat `/shared/{session_id}` tanpa login. Sharing bisa dicabut kapan saja.
@@ -225,6 +237,41 @@ Validation workflows (run on-demand):
 - `backend-pytest` — run test suite
 - `frontend-typecheck` — `vue-tsc --noEmit`
 
+## Python Dependencies (Active)
+
+Only packages actually used — cleaned of all general-purpose agent era dead weight:
+
+| Package | Purpose |
+|---|---|
+| `fastapi` + `uvicorn` | HTTP server |
+| `beanie` + `motor` | MongoDB ODM (async) |
+| `langchain-openai` | LLM client (OpenAI-compatible — used for Qwen) |
+| `langchain-core` + `langchain` | Agent orchestration |
+| `redis` | Redis client (JWT blacklist, task registry) |
+| `pydantic` + `pydantic-settings` | Data validation & config |
+| `python-jose` + `passlib` | JWT auth + password hashing |
+| `tavily-python` | Web search |
+| `aiofiles` | Async file I/O |
+| `httpx` | Async HTTP client |
+| `python-multipart` | File upload parsing |
+| `email-validator` | Email validation |
+
+## Nix System Dependencies (Active)
+
+Defined in `replit.nix` and `[nix] packages` in `.replit`:
+
+| Package | Purpose |
+|---|---|
+| `gitFull` | Git version control |
+| `glibcLocales` | Locale support for Python |
+| `libiconv` | Text encoding conversion |
+| `libxcrypt` | Cryptography (password hashing) |
+| `openssl` | TLS/HTTPS connections |
+| `pkg-config` | Build tool for native packages |
+| `procps` | Process utilities (`replit.nix`) |
+
+Removed (were dead weight from general-purpose agent era): `cargo`, `gdb`, `rustc`, `playwright-driver`, `xvfb-run`, `chromium`, `x11vnc`, `xorg.xorgserver`
+
 ## Key Environment Variables
 
 All configured in Replit Secrets / userenv:
@@ -244,7 +291,7 @@ All configured in Replit Secrets / userenv:
 **Search & proxy:**
 - `TAVILY_API_KEY` — web search
 - `SEARCH_PROVIDER` — `tavily`
-- `TV_PROXY_BASE` — TradingView screener proxy URL (avoids geo-blocking)
+- `TV_PROXY_BASE` — TradingView screener proxy URL (avoids geo-blocking); used by TradingView MCP server
 - `SSL_VERIFY` — set `false` for custom LLM gateways with self-signed TLS certs
 
 **Advanced / optional:**
@@ -262,4 +309,4 @@ All configured in Replit Secrets / userenv:
 - No Docker — all services run directly in the Replit container
 - MongoDB Atlas + Redis Cloud for persistence (no local DB)
 - Agent is reasoning-first and fully autonomous — do not add hardcoded indicator rules back to prompts
-- Both English and Chinese documentation must be kept in sync when updating docs
+- Upload dibatasi gambar saja — tidak ada server-side text extraction untuk dokumen
