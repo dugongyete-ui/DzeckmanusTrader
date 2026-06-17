@@ -35,7 +35,7 @@ class Memory(BaseModel):
         self.messages = self.messages[:-1]
     
     def compact(self) -> None:
-        """Compact memory — two-pass cleanup to keep context size small:
+        """Compact memory — three-pass cleanup to keep context size small:
 
         Pass 1 — Vision image_url base64 in HumanMessages:
             Vision images (chart uploads) are embedded as data-URI base64
@@ -49,6 +49,16 @@ class Memory(BaseModel):
             MCP/market-data tool results can be very large. Keep only the last
             _MAX_TOOL_RESULT_CHARS characters so accumulated step context does
             not flood subsequent steps and cause the model to skip tool calls.
+
+        Pass 3 — Remove intermediate tool call/result pairs:
+            After a step completes, all tool call dispatch messages (AIMessage
+            with tool_calls) and their corresponding ToolMessage responses have
+            already been summarised into step.result. Keeping them in memory
+            inflates context for every subsequent step, causing the model to
+            lose track of available tools and skip tool calls ("ghost success").
+            Keeps: SystemMessage, HumanMessages, and AIMessages with real text.
+            Removes: pure tool-dispatch AIMessages (empty content) and all
+            ToolMessages.
         """
         # --- Pass 1: strip base64 image_url data from HumanMessages ---
         for i, message in enumerate(self.messages):
@@ -87,6 +97,42 @@ class Memory(BaseModel):
                     f"Truncated large tool result in memory: {message.name} at index {i} "
                     f"to last {_MAX_TOOL_RESULT_CHARS} chars"
                 )
+
+        # --- Pass 3: remove intermediate tool call/result pairs ---
+        # After a step completes, all tool call dispatch messages (AIMessage
+        # with tool_calls) and their corresponding ToolMessage responses have
+        # already been summarised into step.result. Keeping them in memory
+        # inflates context for every subsequent step, causing the model to
+        # lose track of available tools and skip tool calls ("ghost success").
+        # We keep: SystemMessage, HumanMessages, and AIMessages that contain
+        # actual text content (narration / final step JSON).
+        # We remove: pure tool-dispatch AIMessages (no text content) and all
+        # ToolMessages.
+        cleaned = []
+        for msg in self.messages:
+            # Always keep system and human messages
+            if msg.type in ("system", "human"):
+                cleaned.append(msg)
+                continue
+            # Remove tool response messages entirely
+            if msg.type == "tool":
+                continue
+            # For AI messages: keep only those that have real text content.
+            # Pure tool-call dispatch messages have empty or whitespace content.
+            if msg.type == "ai":
+                content_text = (
+                    msg.content if isinstance(msg.content, str) else ""
+                )
+                if content_text.strip():
+                    cleaned.append(msg)
+                # else: pure tool-dispatch message — discard
+                continue
+            # Keep anything else (safety fallback)
+            cleaned.append(msg)
+        removed = len(self.messages) - len(cleaned)
+        if removed > 0:
+            logger.debug(f"Pass 3: removed {removed} intermediate tool call/result messages from memory")
+        self.messages = cleaned
 
     @property
     def empty(self) -> bool:
