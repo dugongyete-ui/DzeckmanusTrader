@@ -1,6 +1,6 @@
 export default {
   'Hello': 'Hello',
-  'What can I do for you?': 'What can I do for you?',
+  'What can I do for you?': 'Which market do you want to analyze?',
   'Failed to create agent, please try again later': 'Failed to create agent, please try again later',
   'New Chat': 'New Chat',
   'New Task': 'New Task',

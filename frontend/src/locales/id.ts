@@ -1,6 +1,6 @@
 export default {
   'Hello': 'Halo',
-  'What can I do for you?': 'Apa yang bisa saya bantu?',
+  'What can I do for you?': 'Pasar mana yang ingin kamu analisis?',
   'Failed to create agent, please try again later': 'Gagal membuat agen, coba lagi nanti',
   'New Chat': 'Obrolan Baru',
   'New Task': 'Tugas Baru',
