@@ -1,0 +1,59 @@
+## Task: Fix Aggressive Memory Compaction in Memory Model
+
+### File to edit
+`backend/app/domain/models/memory.py`
+
+### Why this fix is needed
+The `compact()` method currently only does two things:
+1. Strips base64 image data from HumanMessages
+2. Truncates large tool result strings to 3000 chars
+
+It does NOT remove old tool call/result message pairs from completed steps. This means after every step, all the intermediate messages accumulate in memory:
+- Assistant messages containing `tool_calls` (dispatch objects)
+- ToolMessage responses
+- `message_notify_user` narration messages (called before AND after every tool)
+
+For a 5-step analysis with 5 tool calls per step, this creates 50+ extra message pairs that get sent to the LLM on every subsequent step. The LLM's attention gets diluted by all this old context, causing it to skip tool calls and fabricate a completion response ("ghost success") instead of actually calling tools.
+
+### What the fix does
+Add a **Pass 3** to the existing `compact()` method that removes intermediate tool call/result pairs from memory after each step is done. The step's result is already saved in `step.result`, so these messages are no longer needed in context.
+
+**Important**: This does NOT change agent behavior, logic, or thoroughness. It only cleans up already-processed messages so the model receives a leaner context on the next step.
+
+### The fix — add Pass 3 to `compact()` method
+
+In `memory.py`, after the existing Pass 2 block (the `_MAX_TOOL_RESULT_CHARS` truncation), append this Pass 3:
+
+```python
+        # --- Pass 3: remove intermediate tool call/result pairs ---
+        # After a step completes, all tool call dispatch messages (AIMessage
+        # with tool_calls) and their corresponding ToolMessage responses have
+        # already been summarised into step.result. Keeping them in memory
+        # inflates context for every subsequent step, causing the model to
+        # lose track of available tools and skip tool calls ("ghost success").
+        # We keep: SystemMessage, HumanMessages, and AIMessages that contain
+        # actual text content (narration / final step JSON).
+        # We remove: pure tool-dispatch AIMessages (no text content) and all
+        # ToolMessages.
+        cleaned = []
+        for msg in self.messages:
+            # Always keep system and human messages
+            if msg.type in ("system", "human"):
+                cleaned.append(msg)
+                continue
+            # Remove tool response messages entirely
+            if msg.type == "tool":
+                continue
+            # For AI messages: keep only those that have real text content.
+            # Pure tool-call dispatch messages have empty or whitespace content.
+            if msg.type == "ai":
+                content_text = (
+                    msg.content if isinstance(msg.content, str) else ""
+                )
+                if content_text.strip():
+                    cleaned.append(msg)
+                # else: pure tool-dispatch message — discard
+                continue
+            # Keep anything else (safety fallback)
+            cleaned.append(msg)
+        self.messages = cleaned
