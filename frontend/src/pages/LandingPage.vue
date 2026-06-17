@@ -76,44 +76,62 @@
         <div class="how-header fade-up-5">
           <span class="how-label">Cara Kerja</span>
           <h2 class="how-title">Berpikir seperti trader profesional</h2>
-          <p class="how-desc">Dzeck tidak mengikuti skrip. Setiap analisis dimulai dari nol — membaca kondisi pasar aktual, memilih pendekatan yang tepat, lalu menyampaikan keputusan yang jelas dan jujur.</p>
+          <p class="how-desc">Dzeck tidak mengikuti skrip. Setiap analisis dimulai dari nol — dari konteks makro, struktur pasar, hingga keputusan eksekusi yang jelas, jujur, dan bisa langsung dijalankan.</p>
         </div>
 
         <div class="steps-grid">
           <div class="step fade-up-5" style="transition-delay: 0.1s">
             <div class="step-number">01</div>
             <div class="step-icon-wrap">
-              <Search :size="20" />
+              <Globe :size="20" />
             </div>
-            <h3 class="step-title">Membaca pasar dari nol</h3>
-            <p class="step-desc">Dzeck mulai dengan membaca kondisi pasar saat ini — sesi aktif, harga terkini, volatilitas, dan apakah ada arah yang jelas. Tidak ada asumsi sebelumnya.</p>
+            <h3 class="step-title">Cek konteks makro dulu</h3>
+            <p class="step-desc">Sebelum menyentuh chart, Dzeck memeriksa sesi pasar aktif (London / NY / Tokyo / Sydney) dan economic calendar — apakah ada event HIGH IMPACT dalam beberapa jam ke depan. Tanpa ini, sinyal teknikal apapun bisa jadi jebakan.</p>
           </div>
 
           <div class="step fade-up-5" style="transition-delay: 0.2s">
             <div class="step-number">02</div>
             <div class="step-icon-wrap">
-              <Brain :size="20" />
+              <Layers :size="20" />
             </div>
-            <h3 class="step-title">Memilih indikator sendiri</h3>
-            <p class="step-desc">Berdasarkan apa yang ditemukan, Dzeck memutuskan sendiri indikator mana yang relevan dan parameter apa yang tepat untuk kondisi pasar saat ini — bukan dari daftar baku.</p>
+            <h3 class="step-title">Membaca struktur pasar dari nol</h3>
+            <p class="step-desc">Multi-timeframe dari atas ke bawah (D1 → H4 → H1): bias directional, level kunci, zone supply/demand, Order Block, Fair Value Gap, dan Swing Structure. Tidak ada asumsi sebelumnya — semua dibaca dari data aktual.</p>
           </div>
 
           <div class="step fade-up-5" style="transition-delay: 0.3s">
             <div class="step-number">03</div>
             <div class="step-icon-wrap">
-              <MessageSquare :size="20" />
+              <Brain :size="20" />
             </div>
-            <h3 class="step-title">Menjelaskan setiap langkah</h3>
-            <p class="step-desc">Sebelum memanggil tool apapun, Dzeck menjelaskan kenapa. Setelah membaca data, Dzeck menjelaskan apa artinya. Proses berpikirnya transparan dan dapat diikuti.</p>
+            <h3 class="step-title">Memilih tools & parameter sendiri</h3>
+            <p class="step-desc">Berdasarkan karakter pasar yang ditemukan, Dzeck memutuskan sendiri: indikator mana yang relevan hari ini, periode berapa, dan dari timeframe mana. Bukan dari checklist baku — setiap sesi bisa berbeda.</p>
           </div>
 
           <div class="step fade-up-5" style="transition-delay: 0.4s">
             <div class="step-number">04</div>
             <div class="step-icon-wrap">
-              <CheckCircle :size="20" />
+              <MessageSquare :size="20" />
             </div>
-            <h3 class="step-title">Keputusan yang tegas dan jujur</h3>
-            <p class="step-desc">BUY, SELL, atau TUNGGU — dengan entry, stop loss berbasis ATR, target profit, dan tingkat keyakinan yang jujur. Bukan template. Bukan label. Keputusan sungguhan.</p>
+            <h3 class="step-title">Narasi transparan setiap langkah</h3>
+            <p class="step-desc">Sebelum memanggil tool apapun, Dzeck menjelaskan kenapa ia membutuhkannya. Setelah membaca data, Dzeck menjelaskan apa artinya dalam konteks apa yang sudah diketahui. Proses berpikirnya terbuka dan bisa diikuti.</p>
+          </div>
+
+          <div class="step fade-up-5" style="transition-delay: 0.5s">
+            <div class="step-number">05</div>
+            <div class="step-icon-wrap">
+              <Scale :size="20" />
+            </div>
+            <h3 class="step-title">Devil's advocate sebelum keputusan</h3>
+            <p class="step-desc">Sebelum menyimpulkan, Dzeck secara eksplisit menyatakan argumen terkuat MELAWAN trade tersebut — dan menjelaskan mengapa ia tetap lanjut atau tidak. Tidak ada keputusan tanpa melewati tahap ini.</p>
+          </div>
+
+          <div class="step fade-up-5" style="transition-delay: 0.6s">
+            <div class="step-number">06</div>
+            <div class="step-icon-wrap">
+              <Target :size="20" />
+            </div>
+            <h3 class="step-title">Keputusan eksekusi yang lengkap</h3>
+            <p class="step-desc">BUY, SELL, atau TUNGGU — dengan zona entry spesifik, stop loss berbasis volatilitas aktual, target profit, tingkat keyakinan (HIGH / MEDIUM / LOW), dan kondisi yang akan membatalkan setup. Bukan template. Keputusan sungguhan.</p>
           </div>
         </div>
 
@@ -146,7 +164,7 @@ import { useRouter } from 'vue-router'
 import {
   Bot, Sun, Moon, Plus, ArrowUp,
   TrendingUp, BarChart2, Activity, Globe, Calendar, Zap, Target,
-  Search, MessageSquare, CheckCircle, Brain
+  Search, MessageSquare, CheckCircle, Brain, Layers, Scale
 } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
 
@@ -449,7 +467,7 @@ const handleSend = () => {
 /* Steps grid */
 .steps-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   border: 1px solid var(--border-main);
   border-radius: 12px;
