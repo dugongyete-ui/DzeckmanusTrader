@@ -33,36 +33,184 @@ GRAN_LABEL = {
 app = Server("deriv-mcp")
 
 
-# ── Deriv WebSocket ───────────────────────────────────────────────────────────
+# ── Persistent Deriv WebSocket Connection ─────────────────────────────────────
+
+class DerivConnection:
+    """Persistent warm WebSocket connection to the Deriv API.
+
+    A single connection is kept alive for the lifetime of the MCP server
+    process.  All tool calls share it, eliminating per-call handshake
+    overhead (~500 ms–1 s per open/close cycle).
+
+    Features:
+    - req_id multiplexing — concurrent requests are matched by req_id
+    - Background reader — routes incoming messages to the correct Future
+    - Keepalive ping every 25 s — prevents Deriv idle-timeout (~60 s)
+    - Auto-reconnect — transparent reconnection on any connection failure
+    """
+
+    _PING_INTERVAL = 25          # seconds between keepalive pings
+    _CONNECT_TIMEOUT = 12        # seconds to wait for initial handshake
+    _RECV_TIMEOUT = 20           # seconds to wait for a response
+    _MAX_RECONNECT_DELAY = 30    # cap on exponential back-off
+
+    def __init__(self, url: str):
+        self._url = url
+        self._ws = None
+        self._pending: dict[int, asyncio.Future] = {}
+        self._req_id = 0
+        self._lock = asyncio.Lock()          # serialises connect/reconnect
+        self._reader_task: asyncio.Task | None = None
+        self._keepalive_task: asyncio.Task | None = None
+        self._reconnect_delay = 1
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    async def _connect(self) -> None:
+        """Open a fresh WebSocket and start background tasks."""
+        self._ws = await asyncio.wait_for(
+            websockets.connect(
+                self._url,
+                open_timeout=self._CONNECT_TIMEOUT,
+                close_timeout=5,
+                ping_interval=None,    # we handle keepalive ourselves
+            ),
+            timeout=self._CONNECT_TIMEOUT,
+        )
+        self._reconnect_delay = 1          # reset back-off on success
+        self._reader_task = asyncio.create_task(self._reader(), name="deriv-reader")
+        self._keepalive_task = asyncio.create_task(self._keepalive(), name="deriv-keepalive")
+
+    async def _disconnect(self) -> None:
+        """Cancel background tasks and close the socket."""
+        for task in (self._reader_task, self._keepalive_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        self._reader_task = None
+        self._keepalive_task = None
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+
+    async def _reader(self) -> None:
+        """Background task — read all incoming messages and dispatch by req_id."""
+        try:
+            async for raw in self._ws:
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                req_id = data.get("req_id")
+                if req_id is not None and req_id in self._pending:
+                    fut = self._pending.pop(req_id)
+                    if not fut.done():
+                        fut.set_result(data)
+        except Exception as exc:
+            # Connection dropped — fail all pending requests so callers can retry
+            for fut in self._pending.values():
+                if not fut.done():
+                    fut.set_exception(exc)
+            self._pending.clear()
+            # Schedule reconnect (don't await here — we're inside the reader task)
+            asyncio.create_task(self._reconnect(), name="deriv-reconnect")
+
+    async def _keepalive(self) -> None:
+        """Background task — send a ping every _PING_INTERVAL seconds."""
+        try:
+            while True:
+                await asyncio.sleep(self._PING_INTERVAL)
+                if self._ws:
+                    try:
+                        await self._ws.send(json.dumps({"ping": 1}))
+                    except Exception:
+                        break   # reader will trigger reconnect
+        except asyncio.CancelledError:
+            pass
+
+    async def _reconnect(self) -> None:
+        """Reconnect with exponential back-off (called from the reader task)."""
+        async with self._lock:
+            await self._disconnect()
+            while True:
+                try:
+                    await self._connect()
+                    return
+                except Exception:
+                    await asyncio.sleep(self._reconnect_delay)
+                    self._reconnect_delay = min(
+                        self._reconnect_delay * 2, self._MAX_RECONNECT_DELAY
+                    )
+
+    async def _ensure_connected(self) -> None:
+        """Lazily connect on first use; reconnect if the socket is gone."""
+        if self._ws is not None and self._ws.open:
+            return
+        async with self._lock:
+            if self._ws is not None and self._ws.open:
+                return
+            await self._disconnect()
+            await self._connect()
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    async def request(self, payload: dict, retries: int = 2) -> dict:
+        """Send a request and return the response.
+
+        Uses the persistent connection.  Falls back to a new connection on
+        failure (up to *retries* times) to handle transient drops.
+        """
+        last_exc: Exception = RuntimeError("DerivConnection.request: no attempts made")
+        for attempt in range(retries + 1):
+            try:
+                await self._ensure_connected()
+
+                self._req_id += 1
+                req_id = self._req_id
+                payload = dict(payload, req_id=req_id)
+
+                loop = asyncio.get_event_loop()
+                fut: asyncio.Future = loop.create_future()
+                self._pending[req_id] = fut
+
+                await self._ws.send(json.dumps(payload))
+                data = await asyncio.wait_for(
+                    asyncio.shield(fut), timeout=self._RECV_TIMEOUT
+                )
+                return data
+
+            except Exception as exc:
+                last_exc = exc
+                self._pending.pop(self._req_id, None)
+                # Force reconnect before the next attempt
+                async with self._lock:
+                    await self._disconnect()
+                if attempt < retries:
+                    await asyncio.sleep(2 ** attempt)
+                continue
+
+        raise last_exc
+
+
+# Process-level singleton — one warm connection for the whole server lifetime
+_deriv = DerivConnection(DERIV_WS_URL)
+
 
 async def deriv_request(payload: dict, _retries: int = 2) -> dict:
-    """Send a single request to Deriv WebSocket API and return response.
+    """Send a request to Deriv via the persistent warm connection.
 
-    Retries up to _retries times on transient WebSocket / timeout errors
-    to handle intermittent Deriv API latency without propagating the failure.
+    Drop-in replacement for the old per-call open/close approach.
+    Error responses from Deriv are returned as-is (dict with "error" key)
+    so callers can handle them the same way as before.
     """
-    last_exc: Exception = RuntimeError("deriv_request: no attempts made")
-    for attempt in range(_retries + 1):
-        try:
-            async with websockets.connect(DERIV_WS_URL, open_timeout=10, close_timeout=5) as ws:
-                await ws.send(json.dumps(payload))
-                while True:
-                    raw = await asyncio.wait_for(ws.recv(), timeout=15)
-                    data = json.loads(raw)
-                    if "error" in data:
-                        return {"error": data["error"]}
-                    msg_type = data.get("msg_type", "")
-                    if msg_type in ("tick", "history", "ticks_history", "active_symbols",
-                                    "trading_times", "asset_index", "candles"):
-                        return data
-                    if msg_type not in ("", None):
-                        return data
-        except (asyncio.TimeoutError, OSError, Exception) as exc:
-            last_exc = exc
-            if attempt < _retries:
-                await asyncio.sleep(2 ** attempt)
-            continue
-    raise last_exc
+    data = await _deriv.request(payload, retries=_retries)
+    return data
 
 
 async def fetch_candles(symbol: str, granularity: int, count: int) -> list[dict]:
