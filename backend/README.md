@@ -128,6 +128,20 @@ Set in Replit Secrets. See `replit.md` for the full list.
 | `TV_PROXY_BASE` | Optional | TradingView proxy (avoids geo-blocking) |
 | `EXTEND_SYSTEM_MESSAGE` | Optional | Extra instructions appended to all agent prompts at runtime |
 | `MAX_STEPS` | Optional | Max steps per task (default: 100) |
+| `SSL_VERIFY` | Optional | `true` (default) or `false` — set to `false` when using a custom LLM gateway |
+
+### SSL_VERIFY
+
+Python's `httpx` (used by the OpenAI client) verifies SSL certificates against its own CA bundle. Some custom gateways — including Replit-hosted proxies — may use certificate chains not recognized by this bundle, causing `APIConnectionError` even when `curl` works fine.
+
+**Rule:** If `API_BASE` points to a custom gateway (not `api.openai.com`, `api.anthropic.com`, or a major cloud provider), set `SSL_VERIFY=false`.
+
+```
+SSL_VERIFY=false   # for custom/self-hosted gateways
+SSL_VERIFY=true    # for official provider APIs (default)
+```
+
+This setting applies to all three LLM clients: main model, vision model, and planner model.
 
 ## API Reference
 
