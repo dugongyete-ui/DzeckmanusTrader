@@ -150,7 +150,7 @@ TAVILY_API_KEY = "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"
 VISION_API_KEY = "sk-dzcxx1TGFSs4QodkJgXJH1tlAO0wsjUzROSAECPBF7PKMluH"
 API_KEY = "sk-dzcxx1TGFSs4QodkJgXJH1tlAO0wsjUzROSAECPBF7PKMluH"
 PASSWORD_SALT = "manus-salt-2025"
-SSL_VERIFY = "true"
+SSL_VERIFY = "false"
 TV_PROXY_BASE = "https://dramain-aja.galerizaki.workers.dev"
 
 [postMerge]
