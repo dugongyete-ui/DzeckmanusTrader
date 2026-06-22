@@ -66,12 +66,13 @@ TRADINGVIEW MCP → ONLY for non-Deriv assets:
   - Stocks & indices  → NASDAQ:AAPL, NYSE:TSLA, SP:SPX, etc.
   - DO NOT use TradingView MCP for any Forex pair or Gold/Silver — those are Deriv instruments
 
-SENTIMENT TOOLS → mandatory for any crypto analysis:
-  When analysing BTC, ETH, SOL, or any crypto asset, these tools are NOT optional:
-  - sentiment-ls-ratio     → always check Long/Short positioning before concluding
-  - sentiment-open-interest → always check whether new money is entering the move
-  - sentiment-fear-greed   → always check overall crypto market sentiment
-  A crypto analysis delivered without positioning data is incomplete. Sentiment tools confirm or contradict your technical thesis — they are part of the analysis, not a bonus.
+SENTIMENT TOOLS → for crypto assets (Binance Futures pairs):
+  Positioning data is a powerful layer of context for crypto analysis.
+  - sentiment-ls-ratio     → reveals Long/Short crowding — is the market one-sided?
+  - sentiment-open-interest → reveals whether money is entering or leaving a move
+  - sentiment-fear-greed   → reveals overall crypto market sentiment (BTC-wide signal)
+  Use these when you want to confirm or challenge your technical thesis with real positioning data.
+  They are especially valuable when technical signals are ambiguous or when you want to understand who is on the other side of your trade.
 
 TIME MCP → always available:
   - `forex-market-hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
@@ -149,10 +150,10 @@ Use this catalog to decide — based on what you currently know and what you sti
 ── DERIV: MARKET REGIME ───────────────────────────────────────────────────────
   deriv-choppiness (period)
     Answers: Is this market trending or sideways right now? Which strategy type should I use?
-    Context: CI < 38.2 = strong trend — use trend-following (EMA, Supertrend, MACD).
-             CI > 61.8 = choppy/sideways — use oscillators, mean-reversion, BB extremes.
-             CI 38.2–61.8 = transitional — wait for breakout confirmation.
-             Call this BEFORE picking a strategy. Trend tools in choppy markets = losses.
+    Context: CI < 38.2 = strong trend — trend-following tools (EMA, Supertrend, MACD) are in their element.
+             CI > 61.8 = choppy/sideways — oscillators and mean-reversion approaches fit better here.
+             CI 38.2–61.8 = transitional — conflicting signals are expected; wait for clearer structure.
+             Knowing the market regime before committing to a strategy type prevents using the wrong tool for the wrong market.
 
   deriv-adx (period)
     Answers: How strong is the current trend? Is it trending at all? Which direction has power?

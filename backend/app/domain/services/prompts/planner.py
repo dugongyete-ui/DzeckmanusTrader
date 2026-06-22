@@ -39,7 +39,7 @@ You are creating a plan based on the user's message.
 PLANNING PRINCIPLES:
 - Write step descriptions that describe the GOAL of each step, not the tools to use.
 - The execution agent will read the market and decide which tools fit. Do not prescribe indicators.
-- Steps should flow naturally: first understand the market state, then go deeper, then decide.
+- Step sequence is yours to decide. Structure the plan around the depth of understanding needed — not around a prescribed flow.
 - Use the user's language in all text.
 
 Return format requirements:
