@@ -146,13 +146,33 @@ Use this catalog to decide — based on what you currently know and what you sti
     Context: ATR tells you the market's current breath — use it to size stops relative to actual volatility.
              Compare current ATR to its recent average. Spike above average = danger zone.
 
+── DERIV: MARKET REGIME ───────────────────────────────────────────────────────
+  deriv-choppiness (period)
+    Answers: Is this market trending or sideways right now? Which strategy type should I use?
+    Context: CI < 38.2 = strong trend — use trend-following (EMA, Supertrend, MACD).
+             CI > 61.8 = choppy/sideways — use oscillators, mean-reversion, BB extremes.
+             CI 38.2–61.8 = transitional — wait for breakout confirmation.
+             Call this BEFORE picking a strategy. Trend tools in choppy markets = losses.
+
+  deriv-adx (period)
+    Answers: How strong is the current trend? Is it trending at all? Which direction has power?
+    Context: ADX > 25 = trending. ADX < 20 = ranging. ADX rising = trend accelerating.
+             +DI > -DI = bullish trend strength. -DI > +DI = bearish trend strength.
+             Does NOT tell you direction — just strength. Use with EMA/MACD for direction.
+
 ── DERIV: OSCILLATORS (for momentum extremes & reversals) ────────────────────
   deriv-rsi (period)
     Answers: Is price overbought or oversold? Is momentum diverging from price?
     Context: > 70 = overbought, < 30 = oversold (classic). > 50 = bullish bias.
              Longer period (21-28) = smoother, fewer false signals in fast markets.
              Shorter period (9) = more sensitive, better for ranging markets.
-             Divergence (price makes new high but RSI doesn't) = powerful reversal warning.
+             For divergence detection use deriv-divergence (dedicated tool).
+
+  deriv-stochrsi (rsi_period, stoch_period, k_smooth, d_smooth)
+    Answers: Is price at an extreme? Is short-term momentum turning? Is a K/D cross forming?
+    Context: More sensitive than plain RSI. K > 80 = overbought. K < 20 = oversold.
+             K crossing D from below = bullish signal. From above = bearish.
+             Best for: intraday scalping confirmation, fast-moving markets, ranging entries.
 
   deriv-stoch (k_period, d_period)
     Answers: Is price at an extreme within its recent range? Is momentum turning?
@@ -169,6 +189,60 @@ Use this catalog to decide — based on what you currently know and what you sti
     Answers: Where is price relative to the high-low range? Overbought or oversold?
     Context: 0 to -20 = overbought. -80 to -100 = oversold. Faster than Stochastic.
              Good for confirming or contradicting RSI signals.
+
+  deriv-roc (period)
+    Answers: How fast is price moving? Is momentum accelerating or decelerating?
+    Context: Positive = upward momentum. Negative = downward. Zero-cross = trend change.
+             ROC rising while positive = bullish acceleration. Falling while positive = fading.
+             Use for momentum divergence: price makes new high but ROC doesn't = weakening.
+
+  deriv-awesome-oscillator
+    Answers: Is bullish or bearish momentum dominant? Has the momentum trend changed?
+    Context: Above zero = bullish territory. Below = bearish. Zero-cross = reversal signal.
+             Rising histogram = momentum accelerating. Twin peaks = reversal pattern.
+             Bill Williams indicator — works well alongside Ichimoku or MACD.
+
+── DERIV: DIVERGENCE ──────────────────────────────────────────────────────────
+  deriv-divergence (rsi_period)
+    Answers: Is there a divergence between price action and momentum (RSI or MACD)?
+    Context: Bullish RSI divergence: price LL, RSI HL → momentum recovering → reversal up.
+             Bearish RSI divergence: price HH, RSI LH → momentum fading → reversal down.
+             MACD histogram divergence confirms or contradicts RSI divergence.
+             RSI + MACD both diverging = maximum confluence reversal signal.
+             Combine with key S/R level, FVG, or order block for highest-probability setup.
+
+── DERIV: MOVING AVERAGES ─────────────────────────────────────────────────────
+  deriv-ema (periods: list)
+    Answers: Where is price relative to key exponential moving averages? Is trend aligned?
+    Context: EMA crossovers show trend shifts. Price above EMA200 = long-term bullish.
+             EMA reacts faster than SMA. Best for dynamic S/R and trend following.
+
+  deriv-sma (periods: list)
+    Answers: Where is price relative to simple moving averages? Is there a Golden/Death Cross?
+    Context: SMA200 = most-watched long-term level by institutions.
+             SMA50 > SMA200 = Golden Cross (bullish). SMA50 < SMA200 = Death Cross (bearish).
+             Slower than EMA — less noise, better for long-term structural analysis.
+
+  deriv-hma (period)
+    Answers: What is the near-zero-lag moving average? Is momentum direction clear right now?
+    Context: Hull MA eliminates almost all lag. Responds to price changes faster than EMA.
+             HMA rising = bullish momentum. HMA falling = bearish. Cross of price = early signal.
+             Best for: intraday momentum confirmation, replacing slow EMA in fast markets.
+
+── DERIV: VOLATILITY & COMPRESSION ───────────────────────────────────────────
+  deriv-squeeze (bb_period, bb_mult, kc_period, kc_mult)
+    Answers: Is the market compressing before an explosive move? Which direction will it break?
+    Context: Squeeze ON (BB inside KC) = energy coiling — imminent breakout.
+             Squeeze OFF (BB breaks KC) = momentum FIRING. Trade in histogram direction.
+             Positive momentum histogram = bullish breakout. Negative = bearish.
+             Most powerful setup: long squeeze_on period → squeeze_off with accelerating momentum.
+
+  deriv-linreg (period, channel_std)
+    Answers: Where is the statistical fair value trend line? Is price overextended?
+    Context: Midline = least-squares fair value. Upper/lower = ±std deviation bands.
+             Price at upper band = statistically overbought (mean-reversion opportunity).
+             Price at lower band = statistically oversold.
+             Slope direction + steepness tells you trend strength objectively.
 
 ── DERIV: STRUCTURE & LEVELS ──────────────────────────────────────────────────
   deriv-bbands (period, std_mult)
@@ -198,6 +272,20 @@ Use this catalog to decide — based on what you currently know and what you sti
     Answers: Is price at a new N-period high or low? Is this a genuine breakout?
     Context: Price at upper band = N-period high (breakout). Lower = N-period low.
              Period 20 = 20-candle range. Period 55 = classic Turtle breakout level.
+
+  deriv-zigzag (threshold_pct)
+    Answers: Where are the most recent significant swing highs and lows?
+    Context: Filters minor noise — only shows swings > threshold_pct% of price.
+             Returns last 10 meaningful pivot points with price labels.
+             Use to quickly identify the most recent swing structure without manual scanning.
+             threshold_pct=1.0 for intraday, 2.0+ for higher timeframe pivots.
+
+  deriv-multitf (ema_period, rsi_period, adx_period)
+    Answers: Do D1, H4, and H1 timeframes all agree on direction right now?
+    Context: Fetches RSI, MACD histogram, EMA positioning, and ADX across 3 TFs in ONE call.
+             All 3 bullish = high-conviction long. All 3 bearish = high-conviction short.
+             Mixed = wait for alignment or reduce position size.
+             Saves multiple sequential calls when you need the full multi-TF confluence picture.
 
 ── DERIV: SMART MONEY CONCEPTS (ICT/SMC) ─────────────────────────────
   deriv-volume-profile (symbol, granularity, count, bins)

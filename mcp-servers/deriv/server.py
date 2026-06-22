@@ -1529,6 +1529,271 @@ def calc_correlation(candles_a: list[dict], candles_b: list[dict], period: int =
             "label":label,"period":period,"common_candles":len(common)}
 
 
+
+# ── Additional Math Functions ─────────────────────────────────────────────────
+
+def calc_wma(values: list[float], period: int) -> list[float]:
+    """Weighted Moving Average — linearly weighted, recent bars have more weight."""
+    result = []
+    weights = list(range(1, period + 1))
+    wsum = sum(weights)
+    for i in range(period - 1, len(values)):
+        val = sum(values[i - period + 1 + j] * weights[j] for j in range(period)) / wsum
+        result.append(val)
+    return result
+
+
+def calc_hma(closes: list[float], period: int = 20) -> float | None:
+    """Hull Moving Average — dramatically reduces lag while maintaining smoothness.
+    Formula: HMA = WMA(2*WMA(n/2) - WMA(n), sqrt(n))"""
+    if len(closes) < period * 2:
+        return None
+    half = max(int(period / 2), 1)
+    sqrt_p = max(int(period ** 0.5), 1)
+    wma_half = calc_wma(closes, half)
+    wma_full = calc_wma(closes, period)
+    min_len = min(len(wma_half), len(wma_full))
+    if min_len < sqrt_p:
+        return None
+    diff = [2 * wma_half[-min_len + i] - wma_full[-min_len + i] for i in range(min_len)]
+    hma_series = calc_wma(diff, sqrt_p)
+    return round(hma_series[-1], 5) if hma_series else None
+
+
+def calc_stoch_rsi(closes: list[float], rsi_period: int = 14,
+                   stoch_period: int = 14, k_smooth: int = 3, d_smooth: int = 3
+                   ) -> dict | None:
+    """Stochastic RSI — applies Stochastic formula on RSI values.
+    More sensitive than plain RSI. Values 0–100.
+    K > 80 = overbought, K < 20 = oversold."""
+    need = rsi_period + stoch_period + k_smooth + d_smooth + 10
+    if len(closes) < need:
+        return None
+    rsi_series = _rsi_series_incremental(closes, rsi_period)
+    if len(rsi_series) < stoch_period + k_smooth + d_smooth:
+        return None
+    # Stochastic on RSI
+    k_raw = []
+    for i in range(stoch_period - 1, len(rsi_series)):
+        window = rsi_series[i - stoch_period + 1: i + 1]
+        lo, hi = min(window), max(window)
+        k_raw.append(100 * (rsi_series[i] - lo) / (hi - lo) if hi != lo else 50.0)
+    # Smooth K
+    def _sma_s(vals, p):
+        return [sum(vals[i-p+1:i+1])/p for i in range(p-1, len(vals))]
+    k_smooth_series = _sma_s(k_raw, k_smooth)
+    d_smooth_series = _sma_s(k_smooth_series, d_smooth)
+    if not k_smooth_series or not d_smooth_series:
+        return None
+    k = round(k_smooth_series[-1], 2)
+    d = round(d_smooth_series[-1], 2)
+    if k >= 80:
+        signal = "🔴 Overbought"
+    elif k <= 20:
+        signal = "🟢 Oversold"
+    elif k > d:
+        signal = "📈 Bullish momentum"
+    else:
+        signal = "📉 Bearish momentum"
+    return {"k": k, "d": d, "signal": signal,
+            "bullish_cross": k > d and k_smooth_series[-2] <= d_smooth_series[-2] if len(k_smooth_series) > 1 and len(d_smooth_series) > 1 else False}
+
+
+def calc_roc(closes: list[float], period: int = 14) -> float | None:
+    """Rate of Change — percentage change over N periods.
+    Positive = upward momentum, Negative = downward momentum.
+    ROC > 0 and rising = accelerating bullish momentum."""
+    if len(closes) <= period:
+        return None
+    prev = closes[-1 - period]
+    if prev == 0:
+        return None
+    return round((closes[-1] - prev) / prev * 100, 4)
+
+
+def calc_awesome_oscillator(highs: list[float], lows: list[float]) -> dict | None:
+    """Bill Williams Awesome Oscillator = SMA(5, midpoint) - SMA(34, midpoint).
+    Positive histogram = bullish momentum. Negative = bearish.
+    Zero-line cross = potential reversal."""
+    if len(highs) < 34:
+        return None
+    midpoints = [(h + l) / 2 for h, l in zip(highs, lows)]
+    sma5_series = _sma(midpoints, 5)
+    sma34_series = _sma(midpoints, 34)
+    min_len = min(len(sma5_series), len(sma34_series))
+    if min_len < 2:
+        return None
+    ao_now = round(sma5_series[-1] - sma34_series[-1], 5)
+    ao_prev = round(sma5_series[-2] - sma34_series[-2], 5)
+    hist_change = "rising" if ao_now > ao_prev else "falling"
+    if ao_now > 0:
+        momentum = "🟢 Bullish" if hist_change == "rising" else "🟡 Bullish (fading)"
+    else:
+        momentum = "🔴 Bearish" if hist_change == "falling" else "🟡 Bearish (fading)"
+    zero_cross = (ao_now > 0) != (ao_prev > 0)
+    return {"ao": ao_now, "prev": ao_prev, "histogram": hist_change,
+            "momentum": momentum, "zero_line_cross": zero_cross}
+
+
+def calc_choppiness(highs: list[float], lows: list[float], closes: list[float],
+                    period: int = 14) -> float | None:
+    """Choppiness Index — 100 * log10(sum(ATR1,n) / (HighN - LowN)) / log10(n).
+    Range: 38.2 to 100.
+    > 61.8 = sideways/choppy market (avoid trend strategies).
+    < 38.2 = trending market (trend strategies work well)."""
+    if len(closes) < period + 1:
+        return None
+    # True ranges for each bar
+    tr_sum = 0.0
+    for i in range(len(closes) - period, len(closes)):
+        tr = max(highs[i] - lows[i],
+                 abs(highs[i] - closes[i-1]),
+                 abs(lows[i] - closes[i-1]))
+        tr_sum += tr
+    period_high = max(highs[-period:])
+    period_low = min(lows[-period:])
+    range_hl = period_high - period_low
+    if range_hl == 0 or tr_sum == 0:
+        return None
+    import math as _math
+    ci = 100 * _math.log10(tr_sum / range_hl) / _math.log10(period)
+    return round(ci, 2)
+
+
+def calc_squeeze_momentum(highs: list[float], lows: list[float], closes: list[float],
+                          bb_period: int = 20, bb_mult: float = 2.0,
+                          kc_period: int = 20, kc_mult: float = 1.5) -> dict | None:
+    """LazyBear Squeeze Momentum Indicator.
+    Squeeze ON: BB inside KC (low volatility, coiled spring).
+    Squeeze OFF: BB breaks out of KC (momentum is firing).
+    Momentum histogram shows direction of expected move."""
+    if len(closes) < max(bb_period, kc_period) + 5:
+        return None
+    # Bollinger Bands
+    bb = calc_bbands(closes, bb_period, bb_mult)
+    if bb is None:
+        return None
+    # Keltner Channel
+    kc = calc_keltner(highs, lows, closes, kc_period, kc_period, kc_mult)
+    if kc is None:
+        return None
+    # Squeeze: BB inside KC?
+    squeeze_on = bb["upper"] < kc["upper"] and bb["lower"] > kc["lower"]
+    squeeze_off = bb["upper"] > kc["upper"]  # BB just broke out
+    # Momentum: linear regression of delta (close - midpoint of highest/lowest)
+    period = bb_period
+    highest_h = max(highs[-period:])
+    lowest_l = min(lows[-period:])
+    midpoint = (highest_h + lowest_l) / 2
+    mid_ma = sum(closes[-period:]) / period
+    delta = closes[-1] - (midpoint + mid_ma) / 2
+    # Simple momentum direction
+    prev_midpoint = (max(highs[-period-1:-1]) + min(lows[-period-1:-1])) / 2 if len(highs) > period+1 else midpoint
+    prev_mid_ma = sum(closes[-period-1:-1]) / period if len(closes) > period+1 else mid_ma
+    prev_delta = closes[-2] - (prev_midpoint + prev_mid_ma) / 2 if len(closes) > 1 else delta
+    direction = "🟢 Bullish" if delta > 0 else "🔴 Bearish"
+    accelerating = abs(delta) > abs(prev_delta)
+    return {
+        "squeeze_on": squeeze_on,
+        "squeeze_off": squeeze_off,
+        "momentum": round(delta, 5),
+        "momentum_prev": round(prev_delta, 5),
+        "direction": direction,
+        "accelerating": accelerating,
+        "bb_upper": round(bb["upper"], 5),
+        "bb_lower": round(bb["lower"], 5),
+        "kc_upper": round(kc["upper"], 5),
+        "kc_lower": round(kc["lower"], 5),
+    }
+
+
+def calc_linear_regression(closes: list[float], period: int = 50,
+                            channel_std: float = 2.0) -> dict | None:
+    """Linear Regression Channel — least-squares fit over N bars.
+    Returns slope, intercept, upper/lower channel bands (±std deviation).
+    Price above midline = bullish bias. Price at upper band = extended high."""
+    if len(closes) < period:
+        return None
+    import math as _math
+    y = closes[-period:]
+    n = len(y)
+    x = list(range(n))
+    mx = sum(x) / n
+    my = sum(y) / n
+    num = sum((x[i] - mx) * (y[i] - my) for i in range(n))
+    den = sum((x[i] - mx) ** 2 for i in range(n))
+    if den == 0:
+        return None
+    slope = num / den
+    intercept = my - slope * mx
+    predicted = [intercept + slope * xi for xi in x]
+    residuals = [y[i] - predicted[i] for i in range(n)]
+    std = _math.sqrt(sum(r**2 for r in residuals) / n)
+    midline = round(predicted[-1], 5)
+    upper = round(predicted[-1] + channel_std * std, 5)
+    lower = round(predicted[-1] - channel_std * std, 5)
+    slope_pct = round(slope / y[0] * 100, 4) if y[0] else 0
+    current = closes[-1]
+    if current > upper:
+        position = "🔴 Above upper channel — significantly overextended"
+    elif current > midline:
+        position = "📈 Above midline — bullish bias"
+    elif current > lower:
+        position = "📉 Below midline — bearish bias"
+    else:
+        position = "🟢 Below lower channel — significantly underextended"
+    return {"midline": midline, "upper": upper, "lower": lower,
+            "slope": round(slope, 6), "slope_pct_per_bar": slope_pct,
+            "std_dev": round(std, 5), "current_price": round(current, 5),
+            "position": position,
+            "trend_direction": "up" if slope > 0 else "down"}
+
+
+def calc_zigzag(highs: list[float], lows: list[float], closes: list[float],
+                threshold_pct: float = 1.0) -> list[dict]:
+    """ZigZag — identifies significant swing pivots by filtering moves < threshold_pct%.
+    Returns list of recent pivot points (type, index, price).
+    Useful for manually identifying swing structure without arbitrary lookback."""
+    if len(closes) < 10:
+        return []
+    pivots = []
+    direction = None  # "up" or "down"
+    last_pivot_idx = 0
+    last_pivot_price = closes[0]
+    for i in range(1, len(closes)):
+        if direction is None:
+            if highs[i] / last_pivot_price - 1 >= threshold_pct / 100:
+                direction = "up"
+                last_pivot_idx = i
+                last_pivot_price = highs[i]
+            elif 1 - lows[i] / last_pivot_price >= threshold_pct / 100:
+                direction = "down"
+                last_pivot_idx = i
+                last_pivot_price = lows[i]
+        elif direction == "up":
+            if highs[i] > last_pivot_price:
+                last_pivot_idx = i
+                last_pivot_price = highs[i]
+            elif 1 - lows[i] / last_pivot_price >= threshold_pct / 100:
+                pivots.append({"type": "high", "index": last_pivot_idx, "price": round(last_pivot_price, 5)})
+                direction = "down"
+                last_pivot_idx = i
+                last_pivot_price = lows[i]
+        elif direction == "down":
+            if lows[i] < last_pivot_price:
+                last_pivot_idx = i
+                last_pivot_price = lows[i]
+            elif highs[i] / last_pivot_price - 1 >= threshold_pct / 100:
+                pivots.append({"type": "low", "index": last_pivot_idx, "price": round(last_pivot_price, 5)})
+                direction = "up"
+                last_pivot_idx = i
+                last_pivot_price = highs[i]
+    if direction:
+        ptype = "high" if direction == "up" else "low"
+        pivots.append({"type": ptype, "index": last_pivot_idx, "price": round(last_pivot_price, 5)})
+    return pivots[-10:]  # Return last 10 pivots
+
+
 # ── Tool Definitions ──────────────────────────────────────────────────────────
 
 @app.list_tools()
@@ -2277,6 +2542,320 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
                     "count":  {"type": "integer", "description": "Daily candles (default 750 ≈ 3 years)", "default": 750}
+                },
+                "required": ["symbol"]
+            }
+        ),
+
+        # ── New Indicators ─────────────────────────────────────────────────────
+        Tool(
+            name="deriv-adx",
+            description=(
+                "ADX (Average Directional Index) standalone — measures TREND STRENGTH, not direction. "
+                "ADX > 25 = trending market (trend-following strategies work). "
+                "ADX < 20 = ranging/sideways (oscillators more reliable). "
+                "+DI > -DI = bullish trend. -DI > +DI = bearish trend. "
+                "ADX rising + +DI rising = accelerating bullish trend. "
+                "Unlike deriv-technical-analysis, this gives you ADX in isolation with full detail."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "ADX period (default 14)", "default": 14},
+                    "count":  {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-sma",
+            description=(
+                "Simple Moving Average (SMA) for one or multiple periods. "
+                "Slower than EMA but less noise — better for identifying pure price average. "
+                "SMA200 = key long-term support/resistance level. "
+                "SMA50 cross above SMA200 = Golden Cross (bullish). Below = Death Cross (bearish). "
+                "Price above SMA = bullish bias. Below = bearish."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "periods": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of SMA periods e.g. [20, 50, 100, 200]",
+                        "default": [20, 50, 200]
+                    },
+                    "count": {"type": "integer", "description": "Candles to fetch (default 250)", "default": 250}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-hma",
+            description=(
+                "Hull Moving Average (HMA) — nearly eliminates lag from traditional MAs while remaining smooth. "
+                "Responds to price changes much faster than EMA or SMA. "
+                "HMA rising = bullish momentum. HMA falling = bearish momentum. "
+                "Crossover with price = early trend signal. "
+                "Best for: intraday momentum confirmation, replacing slow EMA in fast markets."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "HMA period (default 20)", "default": 20},
+                    "count":  {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-stochrsi",
+            description=(
+                "Stochastic RSI — applies Stochastic formula on RSI values for higher sensitivity. "
+                "More responsive than plain RSI, better for detecting short-term reversals. "
+                "K > 80 = overbought zone. K < 20 = oversold zone. "
+                "K crossing D from below = bullish signal. K crossing D from above = bearish. "
+                "Best for: fast markets, scalping confirmation, ranging market entries."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "rsi_period":   {"type": "integer", "description": "RSI period (default 14)", "default": 14},
+                    "stoch_period": {"type": "integer", "description": "Stochastic period on RSI values (default 14)", "default": 14},
+                    "k_smooth":     {"type": "integer", "description": "K smoothing period (default 3)", "default": 3},
+                    "d_smooth":     {"type": "integer", "description": "D smoothing period (default 3)", "default": 3},
+                    "count":        {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-roc",
+            description=(
+                "Rate of Change (ROC / Momentum) — percentage price change over N periods. "
+                "Positive ROC = upward momentum. Negative ROC = downward momentum. "
+                "ROC crossing zero = potential trend change. "
+                "ROC rising while positive = accelerating bullish momentum. "
+                "Divergence: price makes new high but ROC doesn't = weakening momentum."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "ROC lookback period (default 14)", "default": 14},
+                    "count":  {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-awesome-oscillator",
+            description=(
+                "Bill Williams Awesome Oscillator — difference between 5-period and 34-period midpoint SMAs. "
+                "Above zero = bullish momentum territory. Below zero = bearish. "
+                "Zero-line cross = potential trend reversal signal. "
+                "Rising histogram = accelerating momentum. Falling = fading. "
+                "Twin Peaks: two consecutive peaks on same side of zero = reversal signal. "
+                "Combine with Ichimoku or MACD for confirmation."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "count": {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-choppiness",
+            description=(
+                "Choppiness Index — measures whether the market is trending or sideways. "
+                "Scale: 38.2 (max trend) to 100 (max chop). "
+                "CI < 38.2 = strong directional trend (use trend-following strategies). "
+                "CI > 61.8 = sideways/choppy (use mean-reversion, avoid breakout trades). "
+                "CI between 38.2–61.8 = transitional — watch for breakout. "
+                "ESSENTIAL first step: know if the market is trending before picking a strategy."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period": {"type": "integer", "description": "Choppiness period (default 14)", "default": 14},
+                    "count":  {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-squeeze",
+            description=(
+                "Squeeze Momentum Indicator (LazyBear) — detects volatility compression (Bollinger inside Keltner). "
+                "Squeeze ON = BB inside KC = low volatility, coiled spring — expect explosive move soon. "
+                "Squeeze OFF = BB breaks outside KC = momentum is FIRING — trade in histogram direction. "
+                "Histogram positive & rising = bullish breakout. Negative & falling = bearish breakdown. "
+                "Most powerful setup: squeeze_on → squeeze_off with momentum in one direction."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "bb_period":  {"type": "integer", "description": "Bollinger period (default 20)", "default": 20},
+                    "bb_mult":    {"type": "number",  "description": "BB std multiplier (default 2.0)", "default": 2.0},
+                    "kc_period":  {"type": "integer", "description": "Keltner period (default 20)", "default": 20},
+                    "kc_mult":    {"type": "number",  "description": "KC ATR multiplier (default 1.5)", "default": 1.5},
+                    "count":      {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-linreg",
+            description=(
+                "Linear Regression Channel — statistical least-squares trend line with standard deviation bands. "
+                "Midline = the 'fair value' trend line based on N bars of price history. "
+                "Upper band = price extended high (statistical overbought). "
+                "Lower band = price extended low (statistical oversold). "
+                "Slope direction shows the statistical trend. Steep positive slope = strong uptrend. "
+                "Best for: identifying when price is overextended for mean-reversion, or when trend is intact."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "period":      {"type": "integer", "description": "Regression lookback bars (default 50)", "default": 50},
+                    "channel_std": {"type": "number",  "description": "Channel width in standard deviations (default 2.0)", "default": 2.0},
+                    "count":       {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-divergence",
+            description=(
+                "Divergence scanner — detects RSI and MACD divergence vs price action. "
+                "Bullish RSI divergence: price makes lower low, RSI makes higher low → reversal up. "
+                "Bearish RSI divergence: price makes higher high, RSI makes lower high → reversal down. "
+                "MACD histogram divergence: price LL + histogram HL = bullish (momentum recovering). "
+                "Divergence is one of the highest-probability reversal signals available. "
+                "Combine with key S/R level, FVG, or order block for maximum confluence."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "rsi_period": {"type": "integer", "description": "RSI period (default 14)", "default": 14},
+                    "count":      {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-zigzag",
+            description=(
+                "ZigZag indicator — filters out minor price noise and identifies significant swing pivots. "
+                "Returns the last 10 significant highs and lows based on a minimum movement threshold. "
+                "Use to quickly identify the most recent meaningful swing structure. "
+                "Threshold 1.0% = only show moves > 1% of price. Increase for cleaner higher-TF pivots. "
+                "Best for: identifying key S/R levels from recent price action, confirming structure breaks."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "granularity": {
+                        "type": "integer",
+                        "description": "Candle size: 900=15m, 3600=1h, 14400=4h, 86400=1D",
+                        "default": 3600,
+                        "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
+                    },
+                    "threshold_pct": {"type": "number", "description": "Minimum swing size in % (default 1.0)", "default": 1.0},
+                    "count":         {"type": "integer", "description": "Candles to fetch (default 200)", "default": 200}
+                },
+                "required": ["symbol"]
+            }
+        ),
+        Tool(
+            name="deriv-multitf",
+            description=(
+                "Multi-timeframe confluence tool — fetches RSI, MACD histogram, EMA trend, and ADX "
+                "across three timeframes (D1, H4, H1) in a single call. "
+                "Use to instantly see if all timeframes agree on direction. "
+                "Aligned bullish (all TFs: RSI>50, MACD>0, price>EMA) = high-conviction long. "
+                "Conflicting timeframes = wait for alignment. "
+                "Saves multiple sequential tool calls when you need the full multi-TF picture."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol":      {"type": "string", "description": "Deriv symbol e.g. frxXAUUSD", "default": "frxXAUUSD"},
+                    "ema_period":  {"type": "integer", "description": "EMA period to check price vs (default 50)", "default": 50},
+                    "rsi_period":  {"type": "integer", "description": "RSI period (default 14)", "default": 14},
+                    "adx_period":  {"type": "integer", "description": "ADX period (default 14)", "default": 14}
                 },
                 "required": ["symbol"]
             }
@@ -4316,6 +4895,406 @@ async def _dispatch(name: str, args: dict) -> str:
             f"   If both falling = USD strengthening = bearish for Gold (frxXAUUSD).",
             f"   Correlation divergence = potential mean-reversion trade.",
         ]
+        return "\n".join(lines)
+
+    # ── deriv-adx ──────────────────────────────────────────────────────────────
+    elif name == "deriv-adx":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 14)
+        count       = max(args.get("count", 100), period * 4)
+        candles = await fetch_candles(symbol, granularity, count)
+        opens, highs, lows, closes = candles_to_ohlcv(candles)
+        result = calc_adx(highs, lows, closes, period)
+        if result is None:
+            return f"Not enough data for ADX({period}). Need at least {period * 2 + 1} candles."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        adx_bar = "▓" * min(int(result["adx"] / 5), 20)
+        di_diff = abs(result["plus_di"] - result["minus_di"])
+        return (
+            f"📊 ADX({period}) — {symbol} {gran}\n\n"
+            f"ADX (Trend Strength) : {result['adx']} {adx_bar}\n"
+            f"Strength Label       : {result['strength']}\n"
+            f"+DI (Bullish Power)  : {result['plus_di']}\n"
+            f"-DI (Bearish Power)  : {result['minus_di']}\n"
+            f"DI Spread            : {di_diff:.2f}\n"
+            f"Directional Bias     : {'🟢 Bullish' if result['di_bias'] == 'bullish' else '🔴 Bearish'} (+DI {'>' if result['di_bias'] == 'bullish' else '<'} -DI)\n\n"
+            f"Market Mode          : {'✅ TRENDING — trend-following strategies effective' if result['trending'] else '⚠️ RANGING — oscillators more reliable than trend tools'}\n"
+            f"Candles              : {len(candles)} ({gran})\n"
+            f"Time                 : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-sma ──────────────────────────────────────────────────────────────
+    elif name == "deriv-sma":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        periods     = args.get("periods", [20, 50, 200])
+        count       = max(args.get("count", 250), max(periods) + 10)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, _, _, closes = candles_to_ohlcv(candles)
+        gran  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+        lines = [f"📊 SMA — {symbol} {gran}\n", f"Current Price : {price}\n"]
+        results = {}
+        for p in sorted(periods):
+            val = calc_sma_series(closes, p)
+            if val is None:
+                lines.append(f"  SMA({p:<4}) : N/A (need {p} candles, only {len(closes)} available)")
+            else:
+                diff_pct = round((price - val) / val * 100, 3)
+                bias = "🟢" if price > val else "🔴"
+                lines.append(f"  SMA({p:<4}) : {val}   {bias} price {'+' if diff_pct >= 0 else ''}{diff_pct}% {'above' if diff_pct >= 0 else 'below'}")
+                results[p] = val
+        if len(results) >= 2:
+            skeys = sorted(results.keys())
+            for i in range(len(skeys) - 1):
+                s1, s2 = skeys[i], skeys[i+1]
+                if results[s1] > results[s2]:
+                    lines.append(f"\n📈 SMA({s1}) > SMA({s2}) — short-term above long-term = bullish alignment")
+                else:
+                    lines.append(f"\n📉 SMA({s1}) < SMA({s2}) — short-term below long-term = bearish alignment")
+        lines.append(f"\nCandles : {len(candles)} ({gran})")
+        lines.append(f"Time    : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}")
+        return "\n".join(lines)
+
+    # ── deriv-hma ──────────────────────────────────────────────────────────────
+    elif name == "deriv-hma":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 20)
+        count       = max(args.get("count", 150), period * 3)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, _, _, closes = candles_to_ohlcv(candles)
+        hma_val = calc_hma(closes, period)
+        if hma_val is None:
+            return f"Not enough data for HMA({period}). Need at least {period * 2} candles."
+        gran  = GRAN_LABEL.get(granularity, f"{granularity}s")
+        price = closes[-1]
+        diff_pct = round((price - hma_val) / hma_val * 100, 3)
+        bias = "🟢 BULLISH" if price > hma_val else "🔴 BEARISH"
+        hma_prev = calc_hma(closes[:-1], period) if len(closes) > period * 2 else None
+        trend_dir = ""
+        if hma_prev:
+            trend_dir = "📈 Rising (bullish momentum)" if hma_val > hma_prev else "📉 Falling (bearish momentum)"
+        return (
+            f"📊 HMA({period}) — {symbol} {gran}\n\n"
+            f"HMA Value    : {hma_val}\n"
+            f"Current Price: {price}\n"
+            f"Diff         : {'+' if diff_pct >= 0 else ''}{diff_pct}% {'above' if diff_pct >= 0 else 'below'} HMA\n"
+            f"Bias         : {bias}\n"
+            f"Trend        : {trend_dir}\n\n"
+            f"💡 HMA advantage: near-zero lag — responds faster than EMA/SMA to price changes.\n"
+            f"Candles      : {len(candles)} ({gran})\n"
+            f"Time         : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-stochrsi ─────────────────────────────────────────────────────────
+    elif name == "deriv-stochrsi":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        rsi_period  = args.get("rsi_period", 14)
+        stoch_period= args.get("stoch_period", 14)
+        k_smooth    = args.get("k_smooth", 3)
+        d_smooth    = args.get("d_smooth", 3)
+        count       = max(args.get("count", 150), rsi_period + stoch_period + k_smooth + d_smooth + 20)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, _, _, closes = candles_to_ohlcv(candles)
+        result = calc_stoch_rsi(closes, rsi_period, stoch_period, k_smooth, d_smooth)
+        if result is None:
+            return f"Not enough data for StochRSI. Need at least {rsi_period + stoch_period + k_smooth + d_smooth + 10} candles."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        cross_txt = "✅ Bullish K/D crossover just formed!" if result["bullish_cross"] else ""
+        return (
+            f"📊 Stochastic RSI({rsi_period},{stoch_period}) — {symbol} {gran}\n\n"
+            f"K (fast)  : {result['k']}\n"
+            f"D (slow)  : {result['d']}\n"
+            f"Signal    : {result['signal']}\n"
+            f"{cross_txt}\n"
+            f"Zone      : {'🔴 Overbought (K > 80) — consider short bias' if result['k'] >= 80 else '🟢 Oversold (K < 20) — consider long bias' if result['k'] <= 20 else '⚖️ Mid-zone'}\n\n"
+            f"💡 StochRSI is more sensitive than plain RSI — great for fast intraday moves.\n"
+            f"Candles   : {len(candles)} ({gran})\n"
+            f"Time      : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-roc ──────────────────────────────────────────────────────────────
+    elif name == "deriv-roc":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 14)
+        count       = max(args.get("count", 100), period + 5)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, _, _, closes = candles_to_ohlcv(candles)
+        roc = calc_roc(closes, period)
+        if roc is None:
+            return f"Not enough data for ROC({period})."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        roc_prev = calc_roc(closes[:-1], period) if len(closes) > period + 1 else None
+        accel = ""
+        if roc_prev is not None:
+            if roc > 0 and roc > roc_prev:
+                accel = "📈 Accelerating bullish momentum"
+            elif roc > 0 and roc < roc_prev:
+                accel = "📉 Bullish but decelerating"
+            elif roc < 0 and roc < roc_prev:
+                accel = "📉 Accelerating bearish momentum"
+            elif roc < 0 and roc > roc_prev:
+                accel = "📈 Bearish but decelerating (potential reversal)"
+        zero_cross = roc_prev is not None and ((roc > 0) != (roc_prev > 0))
+        return (
+            f"📊 ROC({period}) — {symbol} {gran}\n\n"
+            f"ROC Value   : {'+' if roc >= 0 else ''}{roc}%\n"
+            f"Momentum    : {'🟢 Positive — price higher than {period} bars ago' if roc > 0 else '🔴 Negative — price lower than ' + str(period) + ' bars ago'}\n"
+            f"{accel}\n"
+            f"{'⚡ Zero-line cross detected — potential trend change!' if zero_cross else ''}\n"
+            f"Current Price: {closes[-1]}\n"
+            f"Candles     : {len(candles)} ({gran})\n"
+            f"Time        : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-awesome-oscillator ───────────────────────────────────────────────
+    elif name == "deriv-awesome-oscillator":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        count       = max(args.get("count", 100), 50)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        result = calc_awesome_oscillator(highs, lows)
+        if result is None:
+            return "Not enough data for Awesome Oscillator. Need at least 34 candles."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        hist_char = "▲" if result["histogram"] == "rising" else "▼"
+        return (
+            f"📊 Awesome Oscillator — {symbol} {gran}\n\n"
+            f"AO Value    : {'+' if result['ao'] >= 0 else ''}{result['ao']}\n"
+            f"Previous    : {'+' if result['prev'] >= 0 else ''}{result['prev']}\n"
+            f"Histogram   : {hist_char} {result['histogram'].upper()}\n"
+            f"Momentum    : {result['momentum']}\n"
+            f"Zero Cross  : {'⚡ YES — potential reversal signal!' if result['zero_line_cross'] else 'No'}\n\n"
+            f"💡 AO = SMA(5,midpoint) - SMA(34,midpoint). Zero-line cross = trend shift.\n"
+            f"Candles     : {len(candles)} ({gran})\n"
+            f"Time        : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-choppiness ───────────────────────────────────────────────────────
+    elif name == "deriv-choppiness":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 14)
+        count       = max(args.get("count", 100), period + 5)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        ci = calc_choppiness(highs, lows, closes, period)
+        if ci is None:
+            return f"Not enough data for Choppiness Index({period})."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        if ci > 61.8:
+            market_mode = "🔴 SIDEWAYS/CHOPPY — avoid breakout & trend strategies. Mean-reversion preferred."
+            strategy    = "Use: RSI extremes, BB bands, oscillators. Avoid: EMA crossovers, MACD trend-follow."
+        elif ci < 38.2:
+            market_mode = "🟢 STRONG TREND — trend-following strategies highly effective."
+            strategy    = "Use: EMA crossovers, Supertrend, MACD momentum. Avoid: counter-trend reversals."
+        else:
+            market_mode = "🟡 TRANSITIONAL — market between trend and chop. Wait for breakout."
+            strategy    = "Monitor: volume, squeeze, or structure break for directional confirmation."
+        ci_bar_filled = int((ci - 38.2) / (100 - 38.2) * 20)
+        bar = "🟢" * max(0, 5 - ci_bar_filled // 4) + "🟡" * 2 + "🔴" * max(0, ci_bar_filled // 4 - 5)
+        return (
+            f"📊 Choppiness Index({period}) — {symbol} {gran}\n\n"
+            f"CI Value    : {ci}\n"
+            f"Scale       : 38.2 (max trend) ◄──── {ci} ────► 100 (max chop)\n"
+            f"Market Mode : {market_mode}\n"
+            f"Strategy    : {strategy}\n\n"
+            f"Candles     : {len(candles)} ({gran})\n"
+            f"Time        : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-squeeze ──────────────────────────────────────────────────────────
+    elif name == "deriv-squeeze":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        bb_period   = args.get("bb_period", 20)
+        bb_mult     = args.get("bb_mult", 2.0)
+        kc_period   = args.get("kc_period", 20)
+        kc_mult     = args.get("kc_mult", 1.5)
+        count       = max(args.get("count", 100), max(bb_period, kc_period) + 10)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        result = calc_squeeze_momentum(highs, lows, closes, bb_period, bb_mult, kc_period, kc_mult)
+        if result is None:
+            return f"Not enough data for Squeeze Momentum. Need at least {max(bb_period, kc_period) + 5} candles."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        if result["squeeze_on"]:
+            status = "🔴 SQUEEZE ON — BB inside KC. Market coiling. Wait for breakout direction."
+            action = "HOLD — monitor momentum direction for breakout signal."
+        elif result["squeeze_off"]:
+            status = f"🚀 SQUEEZE FIRING — BB broke KC. Momentum releasing: {result['direction']}"
+            action = f"TRADE — momentum is {'📈 BULLISH' if result['momentum'] > 0 else '📉 BEARISH'}. Accel: {'Yes ✅' if result['accelerating'] else 'No'}"
+        else:
+            status = "⚪ No active squeeze"
+            action = f"Momentum: {result['direction']}"
+        return (
+            f"📊 Squeeze Momentum (BB{bb_period}/{bb_mult} + KC{kc_period}/{kc_mult}) — {symbol} {gran}\n\n"
+            f"Status      : {status}\n"
+            f"Signal      : {action}\n\n"
+            f"Momentum    : {'+' if result['momentum'] >= 0 else ''}{result['momentum']}\n"
+            f"Prev Momen  : {'+' if result['momentum_prev'] >= 0 else ''}{result['momentum_prev']}\n"
+            f"Accelerating: {'✅ Yes' if result['accelerating'] else '❌ No'}\n\n"
+            f"BB Upper/Lower : {result['bb_upper']} / {result['bb_lower']}\n"
+            f"KC Upper/Lower : {result['kc_upper']} / {result['kc_lower']}\n"
+            f"Candles     : {len(candles)} ({gran})\n"
+            f"Time        : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-linreg ───────────────────────────────────────────────────────────
+    elif name == "deriv-linreg":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        period      = args.get("period", 50)
+        channel_std = args.get("channel_std", 2.0)
+        count       = max(args.get("count", 200), period + 5)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, _, _, closes = candles_to_ohlcv(candles)
+        result = calc_linear_regression(closes, period, channel_std)
+        if result is None:
+            return f"Not enough data for Linear Regression({period})."
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        slope_dir = "📈 Upward" if result["slope"] > 0 else "📉 Downward"
+        return (
+            f"📊 Linear Regression Channel({period}, ±{channel_std}σ) — {symbol} {gran}\n\n"
+            f"Midline (Fair Value) : {result['midline']}\n"
+            f"Upper Band (+{channel_std}σ)  : {result['upper']}\n"
+            f"Lower Band (-{channel_std}σ)  : {result['lower']}\n"
+            f"Current Price        : {result['current_price']}\n"
+            f"Price Position       : {result['position']}\n\n"
+            f"Slope Direction : {slope_dir} ({result['slope_pct_per_bar']:+.4f}% per bar)\n"
+            f"Std Deviation   : {result['std_dev']}\n\n"
+            f"💡 Price at upper band = statistically overextended — potential mean-reversion.\n"
+            f"   Price at lower band = statistically underextended — potential bounce.\n"
+            f"Candles         : {len(candles)} ({gran})\n"
+            f"Time            : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-divergence ───────────────────────────────────────────────────────
+    elif name == "deriv-divergence":
+        symbol      = args.get("symbol", "frxXAUUSD")
+        granularity = args.get("granularity", 3600)
+        rsi_period  = args.get("rsi_period", 14)
+        count       = max(args.get("count", 150), rsi_period + 40)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        rsi_div  = calc_rsi_divergence(highs, lows, closes, rsi_period)
+        macd_div = calc_macd_divergence(highs, lows, closes)
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        rsi_txt = (
+            f"  RSI Divergence  : {'🟢 BULLISH — ' + rsi_div['detail'] if rsi_div['bullish'] else '🔴 BEARISH — ' + rsi_div['detail'] if rsi_div['bearish'] else '⚪ None detected'}"
+        )
+        macd_txt = (
+            f"  MACD Divergence : {'🟢 BULLISH — ' + macd_div['detail'] if macd_div['bullish'] else '🔴 BEARISH — ' + macd_div['detail'] if macd_div['bearish'] else '⚪ None detected'}"
+        )
+        any_div = rsi_div["type"] != "none" or macd_div["type"] != "none"
+        confluence = ""
+        if rsi_div["bullish"] and macd_div["bullish"]:
+            confluence = "\n🔥 CONFLUENCE: Both RSI + MACD show BULLISH divergence — high-probability reversal signal!"
+        elif rsi_div["bearish"] and macd_div["bearish"]:
+            confluence = "\n🔥 CONFLUENCE: Both RSI + MACD show BEARISH divergence — high-probability reversal signal!"
+        return (
+            f"📊 Divergence Scanner — {symbol} {gran}\n\n"
+            f"{rsi_txt}\n"
+            f"{macd_txt}\n"
+            f"{confluence}\n"
+            f"\n{'✅ Divergence found — potential reversal. Confirm with S/R level or FVG.' if any_div else '✅ No divergence currently. Price and momentum aligned.'}\n"
+            f"\nCandles  : {len(candles)} ({gran})\n"
+            f"Time     : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
+
+    # ── deriv-zigzag ───────────────────────────────────────────────────────────
+    elif name == "deriv-zigzag":
+        symbol        = args.get("symbol", "frxXAUUSD")
+        granularity   = args.get("granularity", 3600)
+        threshold_pct = args.get("threshold_pct", 1.0)
+        count         = max(args.get("count", 200), 100)
+        candles = await fetch_candles(symbol, granularity, count)
+        _, highs, lows, closes = candles_to_ohlcv(candles)
+        pivots = calc_zigzag(highs, lows, closes, threshold_pct)
+        gran = GRAN_LABEL.get(granularity, f"{granularity}s")
+        if not pivots:
+            return f"No significant pivots detected with threshold {threshold_pct}%. Try reducing threshold_pct."
+        lines = [f"📊 ZigZag (threshold ≥{threshold_pct}%) — {symbol} {gran}\n"]
+        lines.append(f"Last {len(pivots)} significant swing pivots:\n")
+        for i, p in enumerate(pivots):
+            icon = "🔺 HIGH" if p["type"] == "high" else "🔻 LOW"
+            lines.append(f"  {i+1:2}. {icon}  Price: {p['price']}  (bar index {p['index']})")
+        if len(pivots) >= 2:
+            last_two = pivots[-2:]
+            move = round((last_two[-1]["price"] - last_two[-2]["price"]) / last_two[-2]["price"] * 100, 3)
+            lines.append(f"\nLast swing move: {'+' if move >= 0 else ''}{move}% from {last_two[-2]['price']} to {last_two[-1]['price']}")
+        lines.append(f"\nCandles : {len(candles)} ({gran})")
+        lines.append(f"Time    : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}")
+        return "\n".join(lines)
+
+    # ── deriv-multitf ──────────────────────────────────────────────────────────
+    elif name == "deriv-multitf":
+        symbol     = args.get("symbol", "frxXAUUSD")
+        ema_period = args.get("ema_period", 50)
+        rsi_period = args.get("rsi_period", 14)
+        adx_period = args.get("adx_period", 14)
+        tf_configs = [
+            ("D1",  86400, 150),
+            ("H4",  14400, 150),
+            ("H1",  3600,  100),
+        ]
+        import asyncio as _asyncio
+        async def _fetch_tf(label, gran, cnt):
+            candles = await fetch_candles(symbol, gran, cnt)
+            _, highs, lows, closes = candles_to_ohlcv(candles)
+            rsi_val  = calc_rsi(closes, rsi_period)
+            macd_res = calc_macd(closes, 12, 26, 9)
+            ema_val  = calc_ema_series(closes, ema_period)
+            adx_res  = calc_adx(highs, lows, closes, adx_period)
+            price    = closes[-1]
+            rsi_bias = "bullish" if rsi_val and rsi_val > 50 else "bearish"
+            macd_bias= "bullish" if macd_res and macd_res[2] > 0 else "bearish"
+            ema_bias = "bullish" if ema_val and price > ema_val else "bearish"
+            adx_str  = adx_res["strength"] if adx_res else "N/A"
+            adx_val  = adx_res["adx"] if adx_res else None
+            return {
+                "label": label, "price": price,
+                "rsi": round(rsi_val, 1) if rsi_val else None,
+                "rsi_bias": rsi_bias,
+                "macd_hist": round(macd_res[2], 5) if macd_res else None,
+                "macd_bias": macd_bias,
+                "ema": ema_val, "ema_bias": ema_bias,
+                "adx": adx_val, "adx_strength": adx_str,
+            }
+        results = await _asyncio.gather(*[_fetch_tf(lb, g, c) for lb, g, c in tf_configs])
+        lines = [f"📊 Multi-Timeframe Confluence — {symbol}\n"]
+        lines.append(f"{'TF':<6} {'Price':<12} {'RSI':<8} {'MACD Hist':<14} {f'EMA{ema_period}':<12} {'ADX':<8} {'Strength'}")
+        lines.append("─" * 72)
+        bullish_count = 0
+        bearish_count = 0
+        for r in results:
+            rsi_icon  = "🟢" if r["rsi_bias"] == "bullish" else "🔴"
+            macd_icon = "🟢" if r["macd_bias"] == "bullish" else "🔴"
+            ema_icon  = "🟢" if r["ema_bias"] == "bullish" else "🔴"
+            if r["rsi_bias"] == "bullish": bullish_count += 1
+            else: bearish_count += 1
+            rsi_str  = f"{rsi_icon}{r['rsi']}" if r["rsi"] else "N/A"
+            macd_str = f"{macd_icon}{'+' if r['macd_hist'] and r['macd_hist'] >= 0 else ''}{r['macd_hist']}" if r["macd_hist"] is not None else "N/A"
+            ema_str  = f"{ema_icon}{r['ema']}" if r["ema"] else "N/A"
+            adx_str  = f"{r['adx']}" if r["adx"] else "N/A"
+            lines.append(f"{r['label']:<6} {str(r['price']):<12} {rsi_str:<10} {macd_str:<16} {ema_str:<14} {adx_str:<8} {r['adx_strength']}")
+        lines.append("─" * 72)
+        if bullish_count == 3:
+            confluence = "🟢🟢🟢 ALL TIMEFRAMES BULLISH — high-conviction long setup"
+        elif bearish_count == 3:
+            confluence = "🔴🔴🔴 ALL TIMEFRAMES BEARISH — high-conviction short setup"
+        elif bullish_count == 2:
+            confluence = "🟢🟢⚪ 2/3 Timeframes bullish — moderate long bias. Check conflicting TF for entry risk."
+        elif bearish_count == 2:
+            confluence = "🔴🔴⚪ 2/3 Timeframes bearish — moderate short bias. Check conflicting TF for entry risk."
+        else:
+            confluence = "⚠️ MIXED — no clear TF alignment. Wait for confluence or reduce size."
+        lines.append(f"\nConclusion: {confluence}")
         return "\n".join(lines)
 
     else:
