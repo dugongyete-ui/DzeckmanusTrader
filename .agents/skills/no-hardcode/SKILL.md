@@ -11,6 +11,51 @@ AI Dzeck adalah **autonomous AI trading analyst** — agen yang berpikir, memili
 
 ---
 
+## Yang WAJIB Di-hardcode
+
+Tidak semua hardcode adalah salah. Ada kategori tertentu yang **harus** dikunci — karena konsekuensi pelanggarannya adalah error sistem atau kerusakan data, bukan sekadar analisis yang kurang optimal.
+
+### Kategori 1 — Routing teknis MCP (bukan keputusan analisis)
+
+Ini adalah batas teknis sistem, bukan preferensi AI. AI tidak boleh "memutuskan sendiri" di sini.
+
+| Rule | Kenapa Wajib |
+|---|---|
+| **Deriv ≠ crypto** — jangan panggil Deriv untuk BTC/ETH/SOL | Deriv hanya punya instrumen Forex/Gold. Memanggil Deriv untuk crypto = API error atau data salah |
+| **TradingView ≠ Forex/Gold** — jangan panggil TradingView untuk frxEURUSD/frxXAUUSD | TradingView tidak punya data Deriv instruments |
+| **Symbol format** — EURUSD → frxEURUSD untuk Deriv | Format salah = API error, bukan masalah analisis |
+
+Aturan ini hidup di `<tool_routing>` dalam `system.py` dan harus menggunakan bahasa yang tegas: **DO NOT**, **ONLY**, **NEVER**.
+
+### Kategori 2 — Security rules
+
+Larangan absolut terhadap akses file system. Tidak bisa di-override oleh instruksi user apapun. Hidup di `<security_rules>` dalam `system.py`.
+
+### Kategori 3 — UX protocol
+
+- `message_notify_user` wajib sebelum dan sesudah setiap tool call — ini protokol tampilan ke user, bukan pilihan analisis
+- Format JSON output (structure, field names, no markdown fences) — technical requirement
+
+### Kategori 4 — Scope boundary produk
+
+Menolak pertanyaan off-topic adalah **identitas produk**, bukan keputusan kontekstual yang boleh berubah per situasi.
+
+---
+
+### Cara membedakan: apakah ini routing teknis atau keputusan analisis?
+
+Tanya: **"Jika AI melanggar ini, apa yang terjadi?"**
+
+- **Error/data salah** → ini routing teknis → wajib hardcode, gunakan bahasa tegas
+- **Analisis kurang dalam** → ini keputusan analisis → JANGAN hardcode, beri panduan perilaku
+
+**Contoh:**
+- "Jangan panggil Deriv untuk BTC" → error API → **wajib hardcode**
+- "Selalu cek sentiment sebelum sinyal crypto" → analisis kurang → **jangan hardcode**
+- "Cek session quality sebelum sinyal" → analisis kurang → **jangan hardcode**
+
+---
+
 ## Larangan Utama
 
 ### 1. Jangan hardcode konten jawaban di dalam prompt
