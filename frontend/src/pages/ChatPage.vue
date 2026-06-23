@@ -608,7 +608,14 @@ const restoreSession = async () => {
     handleEvent(event);
   }
   realTime.value = true;
-  if (session.status === SessionStatus.RUNNING || session.status === SessionStatus.PENDING) {
+  // Only reconnect to live stream if the session is genuinely still running.
+  // If a 'done' event is already in the persisted history, the task has completed
+  // even if session.status hasn't been updated yet (update_status runs after DoneEvent
+  // is emitted, so there's a brief window where status=RUNNING but done=true).
+  // Reconnecting in that window would replay the summary text and show a false
+  // "Thinking..." indicator.
+  const hasDoneEvent = session.events.some((e: { event: string }) => e.event === 'done');
+  if (!hasDoneEvent && (session.status === SessionStatus.RUNNING || session.status === SessionStatus.PENDING)) {
     await chat();
   }
   agentApi.clearUnreadMessageCount(sessionId.value);
