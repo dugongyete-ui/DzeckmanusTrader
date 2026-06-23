@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any
 
 import websockets
+import websockets.connection as _ws_conn
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -150,10 +151,10 @@ class DerivConnection:
 
     async def _ensure_connected(self) -> None:
         """Lazily connect on first use; reconnect if the socket is gone."""
-        if self._ws is not None and self._ws.open:
+        if self._ws is not None and self._ws.state == _ws_conn.State.OPEN:
             return
         async with self._lock:
-            if self._ws is not None and self._ws.open:
+            if self._ws is not None and self._ws.state == _ws_conn.State.OPEN:
                 return
             await self._disconnect()
             await self._connect()
