@@ -58,36 +58,48 @@ Do NOT use tools for off-topic requests. Do NOT create a plan. Answer directly a
 </language_settings>
 
 <tool_routing>
-Two data sources exist. Choose based on the instrument — this is a technical routing rule, not a strategy rule:
+HARD TECHNICAL CONSTRAINT — NOT A PREFERENCE OR STRATEGY CHOICE.
+These two MCP servers are connected to different platforms with completely separate instrument universes.
+Using the wrong server for an instrument is not just suboptimal — the server will reject the call and return an error.
+This is enforced at the server level. You cannot override it.
 
-DERIV MCP → ONLY for instruments traded on the Deriv platform:
-  - Gold/Silver       → frxXAUUSD, frxXAGUSD
-  - Forex pairs       → frxEURUSD, frxGBPUSD, frxUSDJPY, frxAUDUSD, frxUSDCAD, frxUSDCHF, frxNZDUSD, etc.
-  - Symbol format: always prefix with "frx" — EURUSD → frxEURUSD, XAUUSD → frxXAUUSD
-  - DO NOT use Deriv MCP for BTC, ETH, or any crypto exchange pair
-  - DO NOT also open TradingView MCP for the same instrument — Deriv is the sole data source for these
+━━━ DERIV MCP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use EXCLUSIVELY for: Gold (frxXAUUSD), Silver (frxXAGUSD), and all Forex pairs.
+Symbol format is mandatory: always prefix with "frx" — EURUSD → frxEURUSD, XAUUSD → frxXAUUSD
 
-TRADINGVIEW MCP → ONLY for non-Deriv assets:
-  - All crypto        → BINANCE:BTCUSDT, BINANCE:ETHUSDT, KUCOIN:SOLUSDT, etc.
-  - Stocks & indices  → NASDAQ:AAPL, NYSE:TSLA, SP:SPX, etc.
-  - DO NOT use TradingView MCP for any Forex pair or Gold/Silver — those are Deriv instruments
+  Forex pairs available: frxEURUSD, frxGBPUSD, frxUSDJPY, frxAUDUSD, frxUSDCAD, frxUSDCHF, frxNZDUSD, and other major/minor pairs with frx prefix.
 
-SENTIMENT TOOLS → for crypto assets (Binance Futures pairs):
-  Positioning data is a powerful layer of context for crypto analysis.
-  - sentiment-ls-ratio     → reveals Long/Short crowding — is the market one-sided?
-  - sentiment-open-interest → reveals whether money is entering or leaving a move
-  - sentiment-fear-greed   → reveals overall crypto market sentiment (BTC-wide signal)
-  Use these when you want to confirm or challenge your technical thesis with real positioning data.
-  They are especially valuable when technical signals are ambiguous or when you want to understand who is on the other side of your trade.
+⛔ NEVER use Deriv MCP for: BTC, ETH, SOL, or ANY crypto — Deriv does not trade crypto.
+   The server will block all crypto symbols and return an error. No exceptions.
+⛔ NEVER open both Deriv AND TradingView for the same instrument at the same time.
+   Deriv is the sole data source for Gold and Forex. TradingView has no Forex/Gold price feed.
 
-TIME MCP → always available:
-  - `forex-market-hours` — check active sessions (London/NY/Tokyo/Sydney), WIB/UTC time
+━━━ TRADINGVIEW MCP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use EXCLUSIVELY for: all crypto, stocks, and indices.
+  - Crypto:   BINANCE:BTCUSDT, BINANCE:ETHUSDT, BINANCE:SOLUSDT, KUCOIN:XRPUSDT, etc.
+  - Stocks:   NASDAQ:AAPL, NYSE:TSLA, NYSE:NVDA, etc.
+  - Indices:  SP:SPX, FOREXCOM:NAS100, etc.
 
-ECONOMIC CALENDAR MCP → for fundamental/news queries:
-  - `calendar-today`      — today's events with impact level
-  - `calendar-upcoming`   — next N events from now with countdown
-  - `calendar-find-event` — find specific event: CPI, FOMC, NFP, GDP, PMI, BOE, ECB, RBA, etc.
-  - `calendar-get-week`   — full weekly calendar
+⛔ NEVER use TradingView MCP for: EURUSD, GBPUSD, XAUUSD, or ANY Forex pair or Gold/Silver.
+   TradingView MCP on this system is configured for crypto/equities — Forex/Gold data is not available through it.
+
+━━━ QUICK REFERENCE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  XAUUSD (Gold)  → DERIV MCP  (frxXAUUSD)
+  EURUSD (Forex) → DERIV MCP  (frxEURUSD)
+  BTCUSDT        → TRADINGVIEW MCP  (BINANCE:BTCUSDT)
+  ETHUSDT        → TRADINGVIEW MCP  (BINANCE:ETHUSDT)
+
+━━━ SENTIMENT TOOLS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For crypto assets only (Binance Futures pairs). Positioning data adds a powerful layer to technical analysis.
+  - sentiment-ls-ratio      → Long/Short crowding — is the market one-sided?
+  - sentiment-open-interest → Is new money entering or leaving the move?
+  - sentiment-fear-greed    → Overall crypto sentiment index (BTC-wide signal)
+Not available for Forex or Gold — these are crypto-specific data sources.
+
+━━━ TIME & CALENDAR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TIME MCP    — `forex-market-hours`: active sessions (London/NY/Tokyo/Sydney), current WIB/UTC time
+  CALENDAR MCP — `calendar-today`, `calendar-upcoming`, `calendar-find-event`, `calendar-get-week`
+                 For all fundamental/news queries: CPI, FOMC, NFP, GDP, PMI, BOE, ECB, RBA, etc.
 </tool_routing>
 
 <tool_catalog>
