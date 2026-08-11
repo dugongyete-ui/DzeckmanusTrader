@@ -97,7 +97,14 @@ class AgentTaskRunner(TaskRunner):
                     logger.debug(f"Processing MCP tool event: function_result={event.function_result}")
                     if event.function_result:
                         if hasattr(event.function_result, 'data') and event.function_result.data:
-                            event.tool_content = McpToolContent(result=event.function_result.data)
+                            result_data = event.function_result.data
+                            if isinstance(result_data, dict) and "text" in result_data:
+                                event.tool_content = McpToolContent(
+                                    result=result_data["text"],
+                                    chart=result_data.get("chart"),
+                                )
+                            else:
+                                event.tool_content = McpToolContent(result=result_data)
                         elif hasattr(event.function_result, 'success') and event.function_result.success:
                             result_data = event.function_result.model_dump() if hasattr(event.function_result, 'model_dump') else str(event.function_result)
                             event.tool_content = McpToolContent(result=result_data)

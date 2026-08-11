@@ -7,7 +7,13 @@
       </div>
     </div>
   </div>
-  <div class="flex-1 min-h-0 w-full overflow-y-auto">
+  <MarketChartView
+    v-if="toolContent.chart"
+    :toolContent="toolContent"
+    :live="live"
+    :sessionId="sessionId"
+  />
+  <div v-else class="flex-1 min-h-0 w-full overflow-y-auto">
     <div class="flex-1 min-h-0 max-w-[640px] mx-auto">
       <div class="flex flex-col overflow-auto h-full px-4 py-3">
         <div class="py-3 pt-0">
@@ -39,6 +45,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { ToolContent } from '@/types/message';
+import MarketChartView from './MarketChartView.vue';
 
 const { t } = useI18n()
 

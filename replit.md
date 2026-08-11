@@ -305,7 +305,7 @@ All configured in Replit Secrets / userenv:
 
 ## User Preferences
 
-- API keys stay in Replit Secrets (personal project)
+- LLM API credentials are configured as shared environment variables when the provider requires a non-Secret env var; never commit or display credential values in source or logs
 - No Docker — all services run directly in the Replit container
 - MongoDB Atlas + Redis Cloud for persistence (no local DB)
 - Agent is reasoning-first and fully autonomous — do not add hardcoded indicator rules back to prompts

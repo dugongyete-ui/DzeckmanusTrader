@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from typing import Dict, Any, List, Optional
 from contextlib import AsyncExitStack
@@ -38,7 +39,10 @@ class MCPTool:
         result: ToolResult = await self.toolkit.manager.call_tool(self.name, args)
 
         if result.success:
-            content = str(result.data) if result.data is not None else "Tool executed successfully"
+            if isinstance(result.data, dict) and "text" in result.data:
+                content = str(result.data["text"])
+            else:
+                content = str(result.data) if result.data is not None else "Tool executed successfully"
         else:
             content = f"Tool error: {result.message}"
 
@@ -320,10 +324,22 @@ class MCPClientManager:
                         else:
                             content.append(str(item))
                 
-                return ToolResult(
-                    success=True,
-                    data='\n'.join(content) if content else "工具执行成功"
-                )
+                text = '\n'.join(content) if content else "工具执行成功"
+                chart_marker = "__DZECK_CHART__"
+                chart_data = None
+                if chart_marker in text:
+                    readable_text, raw_chart = text.split(chart_marker, 1)
+                    try:
+                        chart_data = json.loads(raw_chart)
+                        text = readable_text.rstrip()
+                    except json.JSONDecodeError:
+                        logger.warning("Invalid chart payload returned by MCP tool %s", tool_name)
+
+                data: Any = text
+                if chart_data is not None:
+                    data = {"text": text, "chart": chart_data}
+
+                return ToolResult(success=True, data=data)
             else:
                 return ToolResult(
                     success=True,

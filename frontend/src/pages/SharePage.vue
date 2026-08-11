@@ -225,7 +225,8 @@ const handleMessageEvent = (messageData: MessageEventData) => {
 const handleToolEvent = (toolData: ToolEventData) => {
   const lastStep = getLastStep();
   let toolContent: ToolContent = {
-    ...toolData
+    ...toolData,
+    chart: toolData.content?.chart ?? null,
   }
   if (lastTool.value && lastTool.value.tool_call_id === toolContent.tool_call_id) {
     Object.assign(lastTool.value, toolContent);

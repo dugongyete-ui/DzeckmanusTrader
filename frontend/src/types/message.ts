@@ -22,7 +22,39 @@ export interface ToolContent extends BaseContent {
   function: string;
   args: any;
   content?: any;
+  chart?: ChartPayload | null;
   status: "calling" | "called";
+}
+
+export interface ChartPoint {
+  time: number;
+  value: number;
+}
+
+export interface ChartCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface ChartSeries {
+  name: string;
+  color?: string;
+  type?: "line" | "bar";
+  min?: number;
+  max?: number;
+  points: ChartPoint[];
+}
+
+export interface ChartPayload {
+  symbol: string;
+  granularity: number;
+  timeframe: string;
+  candles: ChartCandle[];
+  overlays?: ChartSeries[];
+  panels?: ChartSeries[];
 }
 
 export interface StepContent extends BaseContent {

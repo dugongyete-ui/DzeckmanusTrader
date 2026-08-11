@@ -31,6 +31,10 @@ GRAN_LABEL = {
     14400:"4h", 28800:"8h", 86400:"1D"
 }
 
+# Internal transport marker used to carry chart data alongside the
+# human-readable tool result. The LLM still receives the readable text.
+CHART_MARKER = "__DZECK_CHART__"
+
 app = Server("deriv-mcp")
 
 
@@ -296,6 +300,69 @@ def _macd_histogram_series(closes: list[float],
     price_start  = (slow - 1) + (signal - 1)
     price_series = closes[price_start: price_start + len(hist_series)]
     return hist_series, price_series
+
+
+def _chart_payload(
+    symbol: str,
+    granularity: int,
+    candles: list[dict],
+    overlays: list[dict] | None = None,
+    panels: list[dict] | None = None,
+) -> dict:
+    """Build chart data from the same candles used by the MCP tool."""
+    return {
+        "symbol": symbol,
+        "granularity": granularity,
+        "timeframe": GRAN_LABEL.get(granularity, f"{granularity}s"),
+        "candles": [
+            {
+                "time": int(c["epoch"]),
+                "open": float(c["open"]),
+                "high": float(c["high"]),
+                "low": float(c["low"]),
+                "close": float(c["close"]),
+            }
+            for c in candles
+            if all(key in c for key in ("epoch", "open", "high", "low", "close"))
+        ],
+        "overlays": overlays or [],
+        "panels": panels or [],
+    }
+
+
+def _series_points(candles: list[dict], values: list[float], start_index: int) -> list[dict]:
+    """Align a calculated series with candle timestamps."""
+    points = []
+    for index, value in enumerate(values):
+        candle_index = start_index + index
+        if candle_index >= len(candles) or value is None:
+            continue
+        points.append({
+            "time": int(candles[candle_index]["epoch"]),
+            "value": float(value),
+        })
+    return points
+
+
+def _chart_text(text: str, chart: dict) -> str:
+    """Keep readable output and append a machine-readable chart payload."""
+    return f"{text}\n{CHART_MARKER}{json.dumps(chart, separators=(',', ':'))}"
+
+
+def _bbands_series(
+    closes: list[float], period: int, std_mult: float
+) -> tuple[list[float], list[float], list[float]]:
+    """Return aligned upper, middle and lower Bollinger Band series."""
+    upper, middle, lower = [], [], []
+    for end in range(period, len(closes) + 1):
+        window = closes[end - period:end]
+        mean = sum(window) / period
+        variance = sum((value - mean) ** 2 for value in window) / period
+        deviation = math.sqrt(variance)
+        middle.append(mean)
+        upper.append(mean + std_mult * deviation)
+        lower.append(mean - std_mult * deviation)
+    return upper, middle, lower
 
 
 def calc_rsi(closes: list[float], period: int = 14) -> float | None:
@@ -1836,12 +1903,11 @@ async def list_tools() -> list[Tool]:
                     "granularity": {
                         "type": "integer",
                         "description": "Candle size in seconds: 60=1m, 300=5m, 900=15m, 3600=1h, 86400=1D",
-                        "default": 3600,
                         "enum": [60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400]
                     },
                     "count": {"type": "integer", "description": "Number of candles (max 5000)", "default": 50}
                 },
-                "required": ["symbol"]
+                "required": ["symbol", "granularity"]
             }
         ),
         Tool(
@@ -1912,13 +1978,12 @@ async def list_tools() -> list[Tool]:
                     "granularity": {
                         "type": "integer",
                         "description": "Candle size in seconds: 60=1m, 900=15m, 3600=1h, 14400=4h, 86400=1D",
-                        "default": 3600,
                         "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
                     },
                     "period": {"type": "integer", "description": "RSI period (default 14)", "default": 14},
                     "count": {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
                 },
-                "required": ["symbol"]
+                "required": ["symbol", "granularity"]
             }
         ),
         Tool(
@@ -1936,7 +2001,6 @@ async def list_tools() -> list[Tool]:
                     "granularity": {
                         "type": "integer",
                         "description": "Candle size in seconds",
-                        "default": 3600,
                         "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
                     },
                     "fast": {"type": "integer", "description": "Fast EMA period (default 12)", "default": 12},
@@ -1944,7 +2008,7 @@ async def list_tools() -> list[Tool]:
                     "signal": {"type": "integer", "description": "Signal EMA period (default 9)", "default": 9},
                     "count": {"type": "integer", "description": "Candles to fetch (default 150)", "default": 150}
                 },
-                "required": ["symbol"]
+                "required": ["symbol", "granularity"]
             }
         ),
         Tool(
@@ -1962,14 +2026,13 @@ async def list_tools() -> list[Tool]:
                     "granularity": {
                         "type": "integer",
                         "description": "Candle size in seconds",
-                        "default": 3600,
                         "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
                     },
                     "period": {"type": "integer", "description": "BB period (default 20)", "default": 20},
                     "std_mult": {"type": "number", "description": "Std deviation multiplier (default 2.0)", "default": 2.0},
                     "count": {"type": "integer", "description": "Candles to fetch (default 100)", "default": 100}
                 },
-                "required": ["symbol"]
+                "required": ["symbol", "granularity"]
             }
         ),
         Tool(
@@ -1987,7 +2050,6 @@ async def list_tools() -> list[Tool]:
                     "granularity": {
                         "type": "integer",
                         "description": "Candle size in seconds",
-                        "default": 3600,
                         "enum": [60, 300, 900, 1800, 3600, 7200, 14400, 28800, 86400]
                     },
                     "periods": {
@@ -1998,7 +2060,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "count": {"type": "integer", "description": "Candles to fetch (default 250)", "default": 250}
                 },
-                "required": ["symbol"]
+                "required": ["symbol", "granularity"]
             }
         ),
         Tool(
@@ -2985,7 +3047,9 @@ async def _dispatch(name: str, args: dict) -> str:
     # ── deriv_get_candles ─────────────────────────────────────────────────────
     elif name == "deriv-get-candles":
         symbol = args.get("symbol", "frxXAUUSD")
-        granularity = args.get("granularity", 3600)
+        granularity = args.get("granularity")
+        if granularity is None:
+            return "Error: granularity/timeframe is required; choose it for this chart."
         count = min(args.get("count", 50), 5000)
         candles = await fetch_candles(symbol, granularity, count)
         gran_label = GRAN_LABEL.get(granularity, f"{granularity}s")
@@ -2999,7 +3063,10 @@ async def _dispatch(name: str, args: dict) -> str:
             change = float(candles[-1]["close"]) - float(candles[0]["open"])
             pct = change / float(candles[0]["open"]) * 100
             lines.append(f"\nPeriod change: {change:+.5f} ({pct:+.2f}%)")
-        return "\n".join(lines)
+        return _chart_text(
+            "\n".join(lines),
+            _chart_payload(symbol, granularity, candles),
+        )
 
     # ── deriv_get_tick_history ────────────────────────────────────────────────
     elif name == "deriv-get-tick-history":
@@ -3108,7 +3175,9 @@ async def _dispatch(name: str, args: dict) -> str:
     # ── deriv_rsi ─────────────────────────────────────────────────────────────
     elif name == "deriv-rsi":
         symbol = args.get("symbol", "frxXAUUSD")
-        granularity = args.get("granularity", 3600)
+        granularity = args.get("granularity")
+        if granularity is None:
+            return "Error: granularity/timeframe is required; choose it for this indicator."
         period = args.get("period", 14)
         count = max(args.get("count", 100), period * 3)
 
@@ -3133,7 +3202,7 @@ async def _dispatch(name: str, args: dict) -> str:
         else:
             signal = "⚖️ Neutral — no clear RSI signal"
 
-        return (
+        text = (
             f"📊 RSI({period}) — {symbol} {gran}\n\n"
             f"RSI Value  : {rsi}\n"
             f"Signal     : {signal}\n"
@@ -3141,11 +3210,30 @@ async def _dispatch(name: str, args: dict) -> str:
             f"Candles    : {len(candles)} ({gran})\n"
             f"Time       : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
         )
+        rsi_series = _rsi_series_incremental(closes, period)
+        return _chart_text(
+            text,
+            _chart_payload(
+                symbol,
+                granularity,
+                candles,
+                panels=[{
+                    "name": f"RSI({period})",
+                    "type": "line",
+                    "min": 0,
+                    "max": 100,
+                    "color": "#a855f7",
+                    "points": _series_points(candles, rsi_series, period),
+                }],
+            ),
+        )
 
     # ── deriv_macd ────────────────────────────────────────────────────────────
     elif name == "deriv-macd":
         symbol = args.get("symbol", "frxXAUUSD")
-        granularity = args.get("granularity", 3600)
+        granularity = args.get("granularity")
+        if granularity is None:
+            return "Error: granularity/timeframe is required; choose it for this indicator."
         fast = args.get("fast", 12)
         slow = args.get("slow", 26)
         signal = args.get("signal", 9)
@@ -3171,7 +3259,7 @@ async def _dispatch(name: str, args: dict) -> str:
         bullish = macd_val > 0
         trend = f"MACD line {'above' if bullish else 'below'} zero = {'uptrend' if bullish else 'downtrend'} territory"
 
-        return (
+        text = (
             f"📊 MACD({fast},{slow},{signal}) — {symbol} {gran}\n\n"
             f"MACD Line  : {macd_val}\n"
             f"Signal Line: {signal_val}\n"
@@ -3181,11 +3269,32 @@ async def _dispatch(name: str, args: dict) -> str:
             f"Candles    : {len(candles)} ({gran})\n"
             f"Time       : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
         )
+        hist_series, _ = _macd_histogram_series(closes, fast, slow, signal)
+        return _chart_text(
+            text,
+            _chart_payload(
+                symbol,
+                granularity,
+                candles,
+                panels=[{
+                    "name": f"MACD({fast},{slow},{signal}) histogram",
+                    "type": "bar",
+                    "color": "#0ea5e9",
+                    "points": _series_points(
+                        candles,
+                        hist_series,
+                        (slow - 1) + (signal - 1),
+                    ),
+                }],
+            ),
+        )
 
     # ── deriv_bbands ──────────────────────────────────────────────────────────
     elif name == "deriv-bbands":
         symbol = args.get("symbol", "frxXAUUSD")
-        granularity = args.get("granularity", 3600)
+        granularity = args.get("granularity")
+        if granularity is None:
+            return "Error: granularity/timeframe is required; choose it for this indicator."
         period = args.get("period", 20)
         std_mult = args.get("std_mult", 2.0)
         count = max(args.get("count", 100), period * 3)
@@ -3214,7 +3323,7 @@ async def _dispatch(name: str, args: dict) -> str:
         else:
             zone = "⚖️ Price near middle band — no extreme signal"
 
-        return (
+        text = (
             f"📊 Bollinger Bands({period}, {std_mult}) — {symbol} {gran}\n\n"
             f"Upper Band : {upper}\n"
             f"Middle (SMA): {mid}\n"
@@ -3226,11 +3335,27 @@ async def _dispatch(name: str, args: dict) -> str:
             f"Candles    : {len(candles)} ({gran})\n"
             f"Time       : {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}"
         )
+        upper_series, middle_series, lower_series = _bbands_series(closes, period, std_mult)
+        return _chart_text(
+            text,
+            _chart_payload(
+                symbol,
+                granularity,
+                candles,
+                overlays=[
+                    {"name": "Upper", "color": "#f97316", "points": _series_points(candles, upper_series, period - 1)},
+                    {"name": "Middle", "color": "#94a3b8", "points": _series_points(candles, middle_series, period - 1)},
+                    {"name": "Lower", "color": "#f97316", "points": _series_points(candles, lower_series, period - 1)},
+                ],
+            ),
+        )
 
     # ── deriv_ema ─────────────────────────────────────────────────────────────
     elif name == "deriv-ema":
         symbol = args.get("symbol", "frxXAUUSD")
-        granularity = args.get("granularity", 3600)
+        granularity = args.get("granularity")
+        if granularity is None:
+            return "Error: granularity/timeframe is required; choose it for this indicator."
         periods = args.get("periods", [9, 21, 50, 100, 200])
         count = max(args.get("count", 250), max(periods) * 2)
 
@@ -3267,7 +3392,19 @@ async def _dispatch(name: str, args: dict) -> str:
                 lines.append("\n⚠️ MIXED — EMAs not aligned (no clear trend)")
 
         lines.append(f"\nCandles: {len(candles)} | Time: {datetime.utcfromtimestamp(candles[-1]['epoch']).strftime('%Y-%m-%d %H:%M UTC')}")
-        return "\n".join(lines)
+        overlays = []
+        for p in sorted(periods):
+            values = _ema(closes, p)
+            if values:
+                overlays.append({
+                    "name": f"EMA{p}",
+                    "color": ["#38bdf8", "#a78bfa", "#fbbf24", "#fb7185", "#4ade80"][len(overlays) % 5],
+                    "points": _series_points(candles, values, p - 1),
+                })
+        return _chart_text(
+            "\n".join(lines),
+            _chart_payload(symbol, granularity, candles, overlays=overlays),
+        )
 
     # ── deriv_atr ─────────────────────────────────────────────────────────────
     elif name == "deriv-atr":

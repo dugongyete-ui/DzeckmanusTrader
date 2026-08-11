@@ -53,6 +53,7 @@ class SearchToolContent(BaseModel):
 class McpToolContent(BaseModel):
     """MCP tool content"""
     result: Any
+    chart: Optional[Dict[str, Any]] = None
 
 ToolContent = Union[
     SearchToolContent,

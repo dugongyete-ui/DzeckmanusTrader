@@ -164,7 +164,7 @@ import { useRouter } from 'vue-router'
 import {
   Bot, Sun, Moon, Plus, ArrowUp,
   TrendingUp, BarChart2, Activity, Globe, Calendar, Zap, Target,
-  Search, MessageSquare, CheckCircle, Brain, Layers, Scale
+  MessageSquare, Brain, Layers, Scale
 } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
 
