@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, RootModel
-from typing import Dict, Any, Literal, Optional, Union, List, get_args
+from pydantic import BaseModel, Field, RootModel, model_validator
+from typing import Annotated, Dict, Any, Literal, Optional, Union, List, get_args
 from datetime import datetime
 import time
 import uuid
@@ -55,10 +55,20 @@ class McpToolContent(BaseModel):
     result: Any
     chart: Optional[Dict[str, Any]] = None
 
-ToolContent = Union[
-    SearchToolContent,
-    McpToolContent,
-]
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_content(cls, value: Any) -> Any:
+        """Keep previously stored MCP tool events readable.
+
+        Older sessions stored MCP content directly as ``{"console": [...]}``
+        instead of under the current ``result`` field. This is a storage
+        compatibility boundary, not an instruction for the agent.
+        """
+        if isinstance(value, dict) and "result" not in value and "console" in value:
+            return {"result": value}
+        return value
+
+ToolContent = Union[SearchToolContent, McpToolContent]
 
 class ToolEvent(BaseEvent):
     """Tool related events"""
@@ -106,14 +116,17 @@ class MessageChunkEvent(BaseEvent):
     content: str = ""
     done: bool = False
 
-AgentEvent = Union[
-    ErrorEvent,
-    PlanEvent, 
-    ToolEvent,
-    StepEvent,
-    MessageEvent,
-    MessageChunkEvent,
-    DoneEvent,
-    TitleEvent,
-    WaitEvent,
+AgentEvent = Annotated[
+    Union[
+        ErrorEvent,
+        PlanEvent,
+        ToolEvent,
+        StepEvent,
+        MessageEvent,
+        MessageChunkEvent,
+        DoneEvent,
+        TitleEvent,
+        WaitEvent,
+    ],
+    Field(discriminator="type"),
 ]
