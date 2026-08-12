@@ -10,3 +10,4 @@
 - [Last-step auto-check bug](last-step-autochk-fix.md) — two bugs in execution.py: (1) ErrorEvent handler lacked return/continue → step raced FAILED→COMPLETED; (2) no retry when LLM returned plain text (skipped tool calls). Fix: ErrorEvent no longer sets FAILED status; added single retry with correction prompt when `step.error == "LLM returned a non-JSON response."`.
 - [Dynamic chart tool transport](chart-tool-transport.md) — chart metadata travels beside readable MCP output so the UI matches the agent-selected candles and indicators without parsing prose.
 - [Event schema compatibility](event-schema-compatibility.md) — persisted events require type-discriminated parsing plus normalization for known legacy payload shapes.
+- [Notification event transport](notification-event-transport.md) — message_notify_user must become a MessageEvent even when it has no attachments.

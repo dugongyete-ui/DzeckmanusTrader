@@ -118,16 +118,18 @@ class ExecutionAgent(BaseAgent):
                         return
                     continue
                 elif event.function_name == "message_notify_user" and event.status == ToolStatus.CALLING:
+                    # A notification is user-facing narration, not merely a
+                    # tool chip. Convert text-only notifications as well as
+                    # attachment notifications into a visible message event.
                     raw_att = event.function_args.get("attachments")
-                    if raw_att:
-                        att_list = [raw_att] if isinstance(raw_att, str) else list(raw_att)
-                        att_list = [p for p in att_list if p]
-                        if att_list:
-                            yield MessageEvent(
-                                message=event.function_args.get("text", ""),
-                                attachments=[FileInfo(file_path=p) for p in att_list],
-                            )
-                            continue
+                    att_list = [raw_att] if isinstance(raw_att, str) else list(raw_att or [])
+                    att_list = [p for p in att_list if p]
+                    self._notification_emitted = True
+                    yield MessageEvent(
+                        message=event.function_args.get("text", ""),
+                        attachments=[FileInfo(file_path=p) for p in att_list] or None,
+                    )
+                    continue
             yield event
 
     async def execute_step(self, plan: Plan, step: Step, message: Message) -> AsyncGenerator[BaseEvent, None]:
@@ -156,6 +158,13 @@ class ExecutionAgent(BaseAgent):
         # with no narration, a fallback message is emitted so the user always
         # knows what happened.
         narration_sent = False
+        self._notification_emitted = False
+
+        def track_notification() -> None:
+            nonlocal narration_sent
+            if self._notification_emitted:
+                narration_sent = True
+                self._notification_emitted = False
 
         try:
             async for event in self._handle_execution_events(step, content):
@@ -164,6 +173,7 @@ class ExecutionAgent(BaseAgent):
                         real_tools_called = True
                     if event.function_name == "message_notify_user":
                         narration_sent = True
+                track_notification()
                 yield event
         except Exception as e:
             error_str = str(e).lower()
@@ -188,6 +198,7 @@ class ExecutionAgent(BaseAgent):
                         real_tools_called = True
                     if event.function_name == "message_notify_user":
                         narration_sent = True
+                track_notification()
                 yield event
 
         # --- Case 1: LLM returned plain text with no tool calls at all ---
@@ -226,6 +237,7 @@ class ExecutionAgent(BaseAgent):
                             real_tools_called = True
                         if event.function_name == "message_notify_user":
                             narration_sent = True
+                    track_notification()
                     yield event
             except Exception as retry_err:
                 logger.error(f"Retry of step {step.id} also raised: {retry_err}")
@@ -267,6 +279,7 @@ class ExecutionAgent(BaseAgent):
                     if isinstance(event, ToolEvent) and event.status == ToolStatus.CALLING:
                         if event.function_name == "message_notify_user":
                             narration_sent = True
+                    track_notification()
                     yield event
             except Exception as retry_err:
                 logger.error(f"Ghost-success retry of step {step.id} also raised: {retry_err}")

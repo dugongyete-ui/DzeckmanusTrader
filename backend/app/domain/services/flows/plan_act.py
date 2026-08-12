@@ -10,6 +10,8 @@ from app.domain.models.event import (
     MessageEvent,
     DoneEvent,
     TitleEvent,
+    ToolEvent,
+    ToolStatus,
 )
 from langchain.messages import HumanMessage as LCHumanMessage
 from app.domain.models.plan import ExecutionStatus
@@ -88,6 +90,29 @@ class PlanActFlow(BaseFlow):
             self.executor.system_prompt = self.executor.system_prompt + extra
             self.planner.system_prompt = self.planner.system_prompt + extra
             logger.debug("extend_system_message injected into executor and planner")
+
+    @staticmethod
+    def _notification_message(event: BaseEvent) -> Optional[MessageEvent]:
+        """Convert planner narration tool calls into visible chat messages."""
+        if not (
+            isinstance(event, ToolEvent)
+            and event.status == ToolStatus.CALLING
+            and event.function_name == "message_notify_user"
+        ):
+            return None
+
+        raw_attachments = event.function_args.get("attachments")
+        attachments = (
+            [raw_attachments]
+            if isinstance(raw_attachments, str)
+            else list(raw_attachments or [])
+        )
+        from app.domain.models.file import FileInfo
+        return MessageEvent(
+            role="assistant",
+            message=event.function_args.get("text", ""),
+            attachments=[FileInfo(file_path=p) for p in attachments if p] or None,
+        )
 
     async def _preprocess_images(self, message: Message) -> Message:
         """Analyze vision images once using the dedicated vision model (if configured).
@@ -224,6 +249,10 @@ class PlanActFlow(BaseFlow):
                     for event in plan_events_buffer:
                         if isinstance(event, PlanEvent):
                             yield event
+                        else:
+                            notification = self._notification_message(event)
+                            if notification:
+                                yield notification
 
                 logger.info(f"Agent {self._agent_id} state changed from {AgentStatus.PLANNING} to {AgentStatus.EXECUTING}")
                 self.status = AgentStatus.EXECUTING
@@ -333,7 +362,8 @@ class PlanActFlow(BaseFlow):
                 # Update plan
                 logger.info(f"Agent {self._agent_id} started updating plan")
                 async for event in self.planner.update_plan(self.plan, step):
-                    yield event
+                    notification = self._notification_message(event)
+                    yield notification if notification else event
                 logger.info(f"Agent {self._agent_id} plan update completed, state changed from {AgentStatus.UPDATING} to {AgentStatus.EXECUTING}")
                 self.status = AgentStatus.EXECUTING
             elif self.status == AgentStatus.SUMMARIZING:
