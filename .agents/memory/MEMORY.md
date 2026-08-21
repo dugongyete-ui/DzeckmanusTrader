@@ -13,3 +13,4 @@
 - [Notification event transport](notification-event-transport.md) — message_notify_user must become a MessageEvent even when it has no attachments.
 - [Market availability gate](market-availability-gate.md) — Forex/Gold stop on live CLOSED/WEEKEND status; crypto remains 24/7.
 - [Calibrated trading uncertainty](calibrated-trading-uncertainty.md) — conflicting or incomplete evidence lowers conviction or creates conditional bias; TUNGGU is reserved for non-actionable or unsafe states.
+- [MCP prompt catalog consistency](mcp-prompt-catalog-consistency.md) — prompt tool documentation must stay aligned with public Deriv tools and the TradingView allowlist via a local consistency test.

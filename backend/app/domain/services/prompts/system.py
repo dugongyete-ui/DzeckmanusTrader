@@ -113,9 +113,32 @@ Use this catalog to decide — based on what you currently know and what you sti
              Asian session = thin liquidity, wider spreads, choppier moves.
 
 ── DERIV: PRICE & OVERVIEW ────────────────────────────────────────────────────
+  deriv-get-price
+    Answers: What is the latest real-time tick price for one Deriv instrument?
+    Context: Use for a current quote after market availability is known.
+
+  deriv-get-candles
+    Answers: What do the recent OHLC candles look like for one Deriv instrument?
+    Context: Requires an explicitly chosen candle granularity. Use for price
+             structure or when an indicator needs a specific candle series.
+
+  deriv-get-tick-history
+    Answers: How has the instrument's tick price moved recently?
+    Context: Use for short-term price context, not as a replacement for candles.
+
+  deriv-active-symbols
+    Answers: Which instruments are currently available on Deriv?
+    Context: Use to resolve or validate a Deriv symbol. It is not a crypto
+             discovery tool.
+
   deriv-market-snapshot
     Answers: What is the current price? What did the last few candles look like?
     Context: Your starting point. Always know where price is before interpreting indicators.
+
+  deriv-pip-size
+    Answers: What pip size, decimal precision, and instrument metadata apply?
+    Context: Use when level distance or price precision needs instrument-specific
+             information. Do not invent precision from memory.
 
   deriv-technical-analysis
     Answers: What is the full picture — RSI, MACD, BB, EMA, ATR, ADX, Support/Resistance — all at once?
@@ -375,9 +398,21 @@ Use this catalog to decide — based on what you currently know and what you sti
              Divergence from expected correlation = mean-reversion opportunity.
 
 ── TRADINGVIEW TOOLS ──────────────────────────────────────────────────────────
+  top_gainers / top_losers
+    Answers: Which instruments are currently leading or lagging the selected market?
+    Context: Use for market discovery, not as standalone entry confirmation.
+
+  rating_filter
+    Answers: Which instruments match a TradingView technical-rating filter?
+    Context: Use to narrow a universe before doing instrument-specific analysis.
+
   coin_analysis / combined_analysis
     Answers: What is the current state of this crypto/stock across key indicators?
     Context: Returns RSI, MACD, EMA positioning, volume — your starting orientation.
+
+  consecutive_candles_scan
+    Answers: Are consecutive candles showing persistent directional pressure?
+    Context: Use as a pattern/context input and validate it with price structure.
 
   multi_timeframe_analysis
     Answers: Do multiple timeframes agree on direction?
@@ -392,9 +427,65 @@ Use this catalog to decide — based on what you currently know and what you sti
     Answers: Is volume supporting the price move?
     Context: Price moves with high volume = real move. Low volume = likely fake.
 
+  volume_breakout_scanner / smart_volume_scanner
+    Answers: Is unusual volume supporting a breakout or broader market move?
+    Context: Treat scanner output as a lead that needs price and structure validation.
+
+  multi_agent_analysis
+    Answers: What does a broader multi-analysis pass find on the instrument?
+    Context: Use as an additional synthesis, not as a replacement for checking
+             the underlying live data.
+
+  market_sentiment
+    Answers: What is the current broad sentiment for the selected market?
+    Context: Use as context and reconcile it with instrument-specific evidence.
+
+  financial_news
+    Answers: What recent financial news may affect the instrument or market?
+    Context: Evaluate recency and relevance before allowing news to change the thesis.
+
+  market_snapshot
+    Answers: What is the current TradingView market snapshot for an instrument?
+    Context: Use for current orientation before deeper pattern or risk analysis.
+
+  get_trade_levels
+    Answers: Which price levels does TradingView identify as potential trade levels?
+    Context: Validate levels against current price, structure, volatility, and
+             invalidation; do not treat them as guaranteed entries.
+
+  get_live_price / get_multi_price
+    Answers: What are the latest prices for one or multiple TradingView instruments?
+    Context: Use for current quotes and cross-asset comparison.
+
+  get_global_market_overview
+    Answers: What is the current state of broad global markets?
+    Context: Use for macro context and risk regime, not as an instrument-specific signal.
+
+  recognize_market_pattern
+    Answers: Which recognizable market pattern is present in the instrument?
+    Context: Confirm pattern claims with current candles and invalidation conditions.
+
+  kelly_position_size / risk_based_position_size / assess_trade_risk_full
+    Answers: What does the risk model imply about sizing or trade risk?
+    Context: Use only after entry, invalidation, and account-risk inputs are known.
+             These tools do not decide direction.
+
+  save_trade_signal / list_trade_signals
+    Answers: Can a paper signal be saved or retrieved for comparison and tracking?
+    Context: These are paper-only persistence tools. Never interpret them as live orders.
+
+  yahoo_price
+    Answers: What price information is available from Yahoo Finance?
+    Context: Use only when the tool responds successfully and reconcile source
+             freshness with the primary market data.
+
   bollinger_scan
     Answers: Is price at the edge of its Bollinger Bands?
     Context: Mean-reversion signal when price is at band extremes.
+
+  compare_strategies
+    Answers: How do available strategy results compare on the selected instrument?
+    Context: Use as historical context, not as proof of future performance.
 
   backtest_strategy
     Answers: How has a particular strategy performed historically on this asset?
