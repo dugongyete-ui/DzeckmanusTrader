@@ -1,0 +1,147 @@
+Anda adalah senior software architect dan safety-focused AI/robotics systems engineer. Anda bekerja di repository DzeckmanusTrader, sebuah aplikasi AI market-analysis berbasis Vue 3 + TypeScript, FastAPI + Python, LangChain, MCP, MongoDB, Redis, dan Plan→Execute→Update flow.
+
+Tujuan utama:
+Tambahkan arsitektur otonom yang terinspirasi loop kontrol robot humanoid modern—Observe → Estimate State → Form Hypothesis → Plan → Act/Call Tool → Validate Result → Update Belief → Replan or Stop—tanpa mengubah aplikasi menjadi eksekutor transaksi live. Sistem harus tetap analysis/signal/paper-only kecuali terdapat approval boundary eksplisit dan teruji.
+
+
+A. Tambahkan structured belief state
+Buat model Pydantic bernama MarketBeliefState atau nama yang konsisten dengan codebase. Minimal field:
+- run_id, session_id, symbol, asset_class
+- as_of timestamp dan data_freshness
+- market_session serta market_open
+- regime: trend/range/transition/unknown
+- directional_bias: bullish/bearish/neutral/unknown
+- thesis
+- evidence_for dan evidence_against
+- contradictions
+- catalysts dan risks
+- volatility_state
+- liquidity_state
+- confidence_before dan confidence_after, 0.0–1.0
+- invalidation_conditions
+- information_gaps
+- last_observations dengan provenance/tool_name/source/timestamp
+- decision_status: investigating/ready_for_review/tunggu/blocked
+
+Tambahkan default yang aman dan validasi Pydantic. Jangan membiarkan LLM memasukkan timestamp masa depan, confidence di luar 0–1, symbol kosong, atau evidence tanpa provenance.
+
+B. Tambahkan observation normalizer
+Buat service yang mengubah hasil MCP/tool menjadi observation terstruktur sebelum masuk ke memory LLM. Setiap observation minimal memiliki:
+- observation_id
+- tool_name
+- source/server
+- symbol
+- observed_at
+- received_at
+- freshness_seconds atau freshness class
+- payload ter-normalisasi
+- quality: high/medium/low/invalid
+- errors/warnings
+
+Pertahankan raw tool result untuk audit, tetapi jangan memasukkan raw payload besar tanpa batas ke context model. Memory compaction tidak boleh menghapus provenance yang sudah tersimpan di structured store.
+
+C. Tambahkan SafetySupervisor server-side
+SafetySupervisor harus berjalan sebelum dan/atau sesudah MCPToolkit.call_tool. Minimal lakukan:
+- asset/source routing validation sesuai aturan repository: Deriv hanya untuk Forex/Gold; TradingView hanya untuk crypto/stocks/indices; sentiment hanya untuk crypto yang didukung;
+- symbol normalization dan rejection untuk symbol invalid;
+- timestamp/freshness validation;
+- NaN/null/schema validation;
+- per-step tool-call budget, retry budget, dan timeout budget;
+- reject duplicate identical tool calls bila tidak ada alasan/context baru;
+- reject any live-order or fund-transfer tool by default;
+- return structured ToolResult failure dengan reason_code, bukan hanya plain error text;
+- append telemetry for accept/reject/timeout/retry.
+
+D. Tambahkan belief update setelah setiap tool result
+Setelah tool berhasil, panggil belief updater deterministic terlebih dahulu untuk merge observation metadata. LLM boleh menghasilkan interpretation/hypothesis, tetapi jangan membiarkan LLM overwrite raw observation, timestamp, provenance, atau safety fields.
+
+Setiap update harus menyimpan:
+- observation
+- interpretation
+- hypothesis
+- evidence_for
+- evidence_against
+- confidence_before
+- confidence_after
+- confidence_delta_reason
+- decision_impact: supports/contradicts/neutral/invalidates
+- next_information_need
+
+E. Tambahkan critic/skeptic gate
+Sebelum final summary mengeluarkan BUY atau SELL, jalankan critic pass yang memeriksa:
+- apakah ada data aktual dan fresh;
+- apakah decision didukung oleh evidence independen yang cukup;
+- apakah terdapat contradiction yang belum dijawab;
+- apakah session, event risk, volatility, invalidation, dan risk context tersedia bila relevan;
+- apakah confidence konsisten dengan data quality;
+- apakah recommendation harus diturunkan menjadi TUNGGU.
+
+Critic harus menghasilkan structured result:
+{
+  "passed": boolean,
+  "severity": "none|warning|block",
+  "missing_evidence": [],
+  "contradictions": [],
+  "risk_flags": [],
+  "confidence_cap": 0.0,
+  "required_replan": boolean,
+  "reason": ""
+}
+
+Jika severity=block atau required_replan=true, jangan finalisasi BUY/SELL. Update belief state, tambahkan information gap, lalu replan atau keluarkan TUNGGU dengan alasan yang jujur.
+
+F. Perbaiki PlanActFlow menjadi supervisory loop
+Pertahankan status existing dan tambahkan state/metadata yang diperlukan. Setelah execution step:
+1. normalize observation;
+2. update belief state;
+3. jalankan critic jika step menyentuh decision;
+4. jika evidence kurang/kontradiksi, update remaining plan;
+5. jika safety gate terminal, stop;
+6. jika max steps/failure budget tercapai, lower confidence dan summarize dengan keterbatasan eksplisit.
+
+Jangan membuat loop tak terbatas. Semua loop harus punya max steps, max replans, max tool calls per step, max retries, dan deadline/timeout.
+
+G. Jangan expose chain-of-thought mentah
+UI boleh menampilkan progress narration yang ringkas dan dapat diaudit, seperti alasan pemeriksaan, tool yang dipanggil, data yang ditemukan, contradiction, dan next step. Jangan menyimpan atau menampilkan hidden chain-of-thought mentah. Gunakan structured rationale summary.
+
+H. Audit trail dan observability
+Tambahkan event/telemetry yang dapat menyimpan:
+- run_id/session_id/step_id/tool_call_id
+- state sebelum dan sesudah update
+- tool/server/source
+- latency, retry_count, status
+- safety decision
+- critic decision
+- data freshness
+- confidence delta
+
+Pastikan data sensitif dan credential tidak masuk log. Tambahkan correlation id jika belum ada.
+
+I. Testing wajib
+Tambahkan unit/integration tests untuk:
+1. routing Deriv/TradingView/sentiment yang valid dan invalid;
+2. stale data ditolak atau confidence diturunkan;
+3. NaN/null/invalid schema ditolak;
+4. duplicate tool call dibatasi;
+5. live-order tool selalu diblokir default;
+6. market closed tetap terminal;
+7. critic memblokir BUY/SELL bila evidence konflik;
+8. critic mengizinkan summary TUNGGU bila data insufficient;
+9. memory compaction tidak menghapus structured provenance;
+10. session resume dan SSE existing tetap kompatibel;
+11. ghost success tidak dianggap valid tanpa real observation;
+12. max steps/replan/retry budget selalu menghentikan loop.
+
+J. Dokumentasi
+Perbarui README atau dokumentasi arsitektur dengan diagram sederhana dan contoh payload belief state. Jelaskan bahwa sistem analysis/signal-only dan bukan nasihat keuangan. Jelaskan environment variables baru tanpa menulis nilai secret.
+
+Output yang harus Anda berikan setelah implementasi:
+1. Audit awal sebelum perubahan.
+2. Daftar file yang diubah dan alasan tiap file.
+3. Patch kode lengkap.
+4. Test yang ditambahkan dan hasilnya.
+5. Contoh alur: user request → observation → belief update → critic → replan/summary.
+6. Daftar risiko yang masih tersisa.
+7. Instruksi deployment yang aman.
+
+Jika ada ambiguity, pilih perubahan incremental yang paling kecil dan aman. Jangan menambahkan framework besar seperti LangGraph hanya demi nama; gunakan state-machine/orchestration yang sudah ada jika cukup. Tambahkan LangGraph hanya jika Anda dapat membuktikan manfaatnya tanpa memutus PlanActFlow, SSE, memory, retry, dan session resume.
