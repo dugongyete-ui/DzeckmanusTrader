@@ -46,6 +46,26 @@ class ExecutionAgent(BaseAgent):
             agent_repository=agent_repository,
             tools=tools
         )
+        self.market_closed_detected = False
+
+    def _stop_after_tool_result(self, function_name, tool_result) -> Optional[str]:
+        """Stop Forex/Gold execution when the live hours tool says closed."""
+        if "forex-market-hours" not in function_name:
+            return None
+
+        artifact = getattr(tool_result, "artifact", None)
+        data = getattr(artifact, "data", None)
+        if isinstance(data, dict):
+            text = str(data.get("text", ""))
+        else:
+            text = str(data or getattr(tool_result, "content", "") or "")
+
+        normalized = text.upper()
+        if "WEEKEND" in normalized and "CLOSED" in normalized:
+            return text
+        if "ALL FOREX MARKETS CLOSED" in normalized:
+            return text
+        return None
 
     def _build_vision_content(self, text: str, images: List[VisionImage]) -> list:
         content = [{"type": "text", "text": text}]
@@ -132,6 +152,22 @@ class ExecutionAgent(BaseAgent):
                     continue
             yield event
 
+        if self._stop_after_tool_reason:
+            market_status = self._stop_after_tool_reason
+            self._stop_after_tool_reason = None
+            self.market_closed_detected = True
+            message = (
+                f"{market_status}\n\n"
+                "Saya berhenti di sini karena market sedang tutup. "
+                "Tidak ada analisis indikator atau rekomendasi entry yang dijalankan."
+            )
+            step.status = ExecutionStatus.COMPLETED
+            step.success = True
+            step.result = message
+            step.error = None
+            yield MessageEvent(role="assistant", message=message)
+            yield StepEvent(status=StepStatus.COMPLETED, step=step)
+
     async def execute_step(self, plan: Plan, step: Step, message: Message) -> AsyncGenerator[BaseEvent, None]:
         prompt = EXECUTION_PROMPT.format(
             step=step.description,
@@ -145,6 +181,8 @@ class ExecutionAgent(BaseAgent):
             vision_content = self._build_vision_content(prompt, message.vision_images)
 
         step.status = ExecutionStatus.RUNNING
+        self.market_closed_detected = False
+        self._stop_after_tool_reason = None
         yield StepEvent(status=StepStatus.STARTED, step=step)
 
         content = vision_content if vision_content else prompt

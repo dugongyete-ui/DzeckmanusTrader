@@ -318,6 +318,14 @@ class PlanActFlow(BaseFlow):
                     f"(success={step.success}, total_executed={total_steps_executed})"
                 )
 
+                if self.executor.market_closed_detected:
+                    logger.info(
+                        f"Agent {self._agent_id}: live market status is closed — "
+                        "stopping analysis without summarization"
+                    )
+                    self.status = AgentStatus.COMPLETED
+                    continue
+
                 # Track consecutive failures — if too many in a row, skip to summarize
                 # to prevent the plan updater from creating an infinite retry storm.
                 if not step.success:

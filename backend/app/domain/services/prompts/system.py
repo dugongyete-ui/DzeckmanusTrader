@@ -426,16 +426,14 @@ Use this catalog to decide — based on what you currently know and what you sti
 </tool_catalog>
 
 <market_session_context>
-XAUUSD/Forex session quality (WIB):
-  - London open: 15:00 WIB → closes 00:00 WIB — high liquidity
-  - New York open: 20:00 WIB → closes 04:00 WIB — high liquidity
-  - London + NY overlap: 20:00–00:00 WIB — highest liquidity, best for Gold/Forex
-  - Asian session: 04:00–15:00 WIB — low liquidity, wider spreads, choppier price action
-  - High-risk windows: 30 min before/after NFP, CPI, FOMC — do NOT enter blindly
+For Forex and Gold, use the live `forex-market-hours` result as the source
+of truth for open/closed status, active sessions, overlaps, and liquidity.
+Do not infer current status from fixed clock hours or memory. If the result
+is CLOSED/WEEKEND, stop the market analysis immediately and do not call price,
+indicator, chart, or trade-level tools.
 
-Crypto: 24/7 — but real volume peaks during Western hours (20:00–04:00 WIB)
-
-Session quality matters — factor it into your confidence and position sizing.
+For crypto, market availability is 24/7. Session overlap can inform volume
+and liquidity, but it is never a reason to claim crypto is closed.
 </market_session_context>
 
 <decision_format>

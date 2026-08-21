@@ -78,6 +78,7 @@ class BaseAgent(ABC):
         )
         self.toolkits = tools
         self.memory = None
+        self._stop_after_tool_reason: Optional[str] = None
 
     async def _parse_json(self, text: str) -> dict:
         """Parse JSON from LLM output using RetryWithErrorOutputParser."""
@@ -114,6 +115,18 @@ class BaseAgent(ABC):
                     break
 
         return ToolMessage(tool_call_id=tool_call["id"], name=tool.name, content=last_error)
+
+    def _stop_after_tool_result(
+        self,
+        function_name: str,
+        tool_result: ToolMessage,
+    ) -> Optional[str]:
+        """Return a stop reason for a domain-specific terminal tool result.
+
+        Most agents should continue after every tool. Specialized agents can
+        override this hook for safety or market-state gates.
+        """
+        return None
     
     # Compact tool results in memory every this many tool-call rounds
     # within a single step to prevent "Payload Too Large" on large responses.
@@ -167,6 +180,11 @@ class BaseAgent(ABC):
                     function_args=function_args,
                     function_result=tool_result.artifact
                 )
+
+                stop_reason = self._stop_after_tool_result(function_name, tool_result)
+                if stop_reason:
+                    self._stop_after_tool_reason = stop_reason
+                    return
 
                 tool_responses.append(tool_result)
 

@@ -11,3 +11,4 @@
 - [Dynamic chart tool transport](chart-tool-transport.md) — chart metadata travels beside readable MCP output so the UI matches the agent-selected candles and indicators without parsing prose.
 - [Event schema compatibility](event-schema-compatibility.md) — persisted events require type-discriminated parsing plus normalization for known legacy payload shapes.
 - [Notification event transport](notification-event-transport.md) — message_notify_user must become a MessageEvent even when it has no attachments.
+- [Market availability gate](market-availability-gate.md) — Forex/Gold stop on live CLOSED/WEEKEND status; crypto remains 24/7.
