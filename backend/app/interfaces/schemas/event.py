@@ -166,6 +166,7 @@ class TitleSSEEvent(BaseSSEEvent):
     data: TitleEventData
 
 class PlanEventData(BaseEventData):
+    status: PlanStatus
     steps: List[StepEventData]
 
 class PlanSSEEvent(BaseSSEEvent):
@@ -177,6 +178,7 @@ class PlanSSEEvent(BaseSSEEvent):
         return cls(
             data=PlanEventData(
                 **BaseEventData.base_event_data(event),
+                status=event.status,
                 steps=[StepEventData(
                     **BaseEventData.base_event_data(event),
                     status=step.status,

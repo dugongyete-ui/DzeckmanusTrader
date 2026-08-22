@@ -20,7 +20,7 @@ export interface ToolEventData extends BaseEventData {
 }
 
 export interface StepEventData extends BaseEventData {
-  status: "pending" | "running" | "completed" | "failed"
+  status: "pending" | "running" | "completed" | "failed" | "skipped"
   id: string
   description: string
 }
@@ -52,5 +52,6 @@ export interface TitleEventData extends BaseEventData {
 }
 
 export interface PlanEventData extends BaseEventData {
+  status?: "created" | "updated" | "completed";
   steps: StepEventData[];
 }

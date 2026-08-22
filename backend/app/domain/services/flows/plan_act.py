@@ -323,6 +323,14 @@ class PlanActFlow(BaseFlow):
                         f"Agent {self._agent_id}: live market status is closed — "
                         "stopping analysis without summarization"
                     )
+                    # Close the whole plan as a terminal safety outcome. The
+                    # remaining steps were intentionally not run, not left
+                    # pending; this keeps the persisted plan and UI in sync.
+                    for remaining_step in self.plan.steps:
+                        if not remaining_step.is_done():
+                            remaining_step.status = ExecutionStatus.SKIPPED
+                            remaining_step.error = "Skipped because the market is closed."
+                    self.plan.status = ExecutionStatus.COMPLETED
                     self.status = AgentStatus.COMPLETED
                     continue
 

@@ -462,6 +462,16 @@ const handlePlanEvent = (planData: PlanEventData) => {
   plan.value = planData;
 }
 
+const markPlanStoppedLocally = () => {
+  if (!plan.value) return;
+  plan.value.status = 'completed';
+  for (const step of plan.value.steps) {
+    if (step.status === 'pending' || step.status === 'running') {
+      step.status = 'skipped';
+    }
+  }
+}
+
 // Main event handler function
 const handleEvent = (event: AgentSSEEvent) => {
   if (event.event === 'message') {
@@ -704,9 +714,20 @@ const handleScroll = (_: Event) => {
   follow.value = simpleBarRef.value?.isScrolledToBottom() ?? false;
 }
 
-const handleStop = () => {
-  if (sessionId.value) {
-    agentApi.stopSession(sessionId.value);
+const handleStop = async () => {
+  if (!sessionId.value || !isLoading.value) return;
+
+  // Give immediate feedback; the backend cancellation below is authoritative
+  // and publishes the terminal message/plan/done events for persistence.
+  isLoading.value = false;
+  isWaitingForInput.value = false;
+  currentThinkingText.value = null;
+  markPlanStoppedLocally();
+
+  try {
+    await agentApi.stopSession(sessionId.value);
+  } catch (error) {
+    console.error('Failed to stop agent:', error);
   }
 }
 

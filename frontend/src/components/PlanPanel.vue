@@ -28,6 +28,8 @@
             <div v-for="step in plan.steps" :key="step.id"
               class="flex items-start gap-2.5 w-full px-4 py-2 truncate">
               <StepSuccessIcon v-if="step.status === 'completed'" />
+              <span v-else-if="step.status === 'skipped'"
+                class="relative top-[1px] flex h-4 w-4 flex-shrink-0 items-center justify-center text-xs text-[var(--text-tertiary)]">—</span>
               <Clock v-else class="relative top-[2px] flex-shrink-0" :size="16" />
               <div class="flex flex-col w-full gap-[2px] truncate">
                 <div class="text-sm truncate" :title="step.description"
@@ -95,12 +97,17 @@ const togglePanel = () => {
 };
 
 const planProgress = computed((): string => {
-  const completedSteps = props.plan?.steps.filter(step => step.status === 'completed').length ?? 0;
-  return `${completedSteps} / ${props.plan?.steps.length ?? 1}`;
+  const finishedSteps = props.plan?.steps.filter(step =>
+    step.status === 'completed' || step.status === 'skipped'
+  ).length ?? 0;
+  return `${finishedSteps} / ${props.plan?.steps.length ?? 1}`;
 });
 
 const isCompleted = computed((): boolean => {
-  return props.plan?.steps.every(step => step.status === 'completed') ?? false;
+  return props.plan?.status === 'completed'
+    || (props.plan?.steps.every(step =>
+      step.status === 'completed' || step.status === 'skipped'
+    ) ?? false);
 });
 
 const currentStep = computed((): string => {

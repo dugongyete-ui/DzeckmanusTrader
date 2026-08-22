@@ -20,6 +20,7 @@ class StepStatus(str, Enum):
     STARTED = "started"
     FAILED = "failed"
     COMPLETED = "completed"
+    SKIPPED = "skipped"
 
 
 class ToolStatus(str, Enum):

@@ -8,6 +8,7 @@ class ExecutionStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    SKIPPED = "skipped"
 
 class Step(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -19,7 +20,11 @@ class Step(BaseModel):
     attachments: List[str] = []
 
     def is_done(self) -> bool:
-        return self.status == ExecutionStatus.COMPLETED or self.status == ExecutionStatus.FAILED
+        return self.status in {
+            ExecutionStatus.COMPLETED,
+            ExecutionStatus.FAILED,
+            ExecutionStatus.SKIPPED,
+        }
 
 class Plan(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

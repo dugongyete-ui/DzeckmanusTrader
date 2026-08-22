@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from app.domain.models.session import Session, SessionStatus
 from app.domain.external.search import SearchEngine
-from app.domain.models.event import BaseEvent, ErrorEvent, DoneEvent, MessageEvent, WaitEvent, AgentEvent
+from app.domain.models.event import BaseEvent, ErrorEvent, DoneEvent, MessageEvent, WaitEvent, AgentEvent, PlanEvent, PlanStatus
 from pydantic import TypeAdapter
 from app.domain.repositories.agent_repository import AgentRepository
 from app.domain.repositories.session_repository import SessionRepository
@@ -14,6 +14,7 @@ from typing import Type
 from app.domain.external.file import FileStorage
 from app.domain.models.file import FileInfo
 from app.domain.repositories.mcp_repository import MCPRepository
+from app.domain.models.plan import ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,29 @@ class AgentDomainService:
             raise RuntimeError("Session not found")
         task = await self._get_task(session)
         if task:
+            # Publish terminal events before cancelling the runner. This keeps
+            # the progress panel synchronized instead of leaving pending steps
+            # visible after the user stops the analysis.
+            plan = session.get_last_plan()
+            if plan and not plan.is_done():
+                for step in plan.steps:
+                    if not step.is_done():
+                        step.status = ExecutionStatus.SKIPPED
+                        step.error = "Skipped because the user stopped the analysis."
+                plan.status = ExecutionStatus.COMPLETED
+                language = plan.language or "en"
+                stop_message = (
+                    "Analysis stopped by your request."
+                    if language == "en"
+                    else "Analisis dihentikan atas permintaan Anda."
+                )
+                for event in (
+                    MessageEvent(role="assistant", message=stop_message),
+                    PlanEvent(status=PlanStatus.COMPLETED, plan=plan),
+                ):
+                    event_id = await task.output_stream.put(event.model_dump_json())
+                    event.id = event_id
+                    await self._session_repository.add_event(session_id, event)
             task.cancel()
         await self._session_repository.update_status(session_id, SessionStatus.COMPLETED)
 
